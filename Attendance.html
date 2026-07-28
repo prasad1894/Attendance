@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSM Attendance</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,sans-serif;
+}
+
+body{
+    background:#f4f6f9;
+    padding:15px;
+}
+
+.container{
+    max-width:900px;
+    margin:auto;
+}
+
+.card{
+    background:#fff;
+    padding:15px;
+    border-radius:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.1);
+}
+
+h2{
+    text-align:center;
+    margin-bottom:10px;
+}
+
+.info{
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+    font-weight:bold;
+}
+
+select{
+    width:100%;
+    padding:10px;
+    margin-bottom:15px;
+    border:1px solid #ccc;
+    border-radius:8px;
+    font-size:16px;
+}
+
+.stats{
+    display:flex;
+    justify-content:space-around;
+    margin-bottom:15px;
+    font-weight:bold;
+    font-size:18px;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(55px,1fr));
+    gap:8px;
+}
+
+.roll{
+    border:none;
+    border-radius:8px;
+    padding:12px 0;
+    background:#2196f3;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+    transition:.2s;
+}
+
+.roll.absent{
+    background:#f44336;
+}
+
+.buttons{
+    margin-top:20px;
+    display:grid;
+    gap:10px;
+}
+
+.action{
+    border:none;
+    padding:12px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:15px;
+    color:white;
+}
+
+.copy-present{
+    background:#4caf50;
+}
+
+.copy-absent{
+    background:#ff9800;
+}
+
+.copy-report{
+    background:#673ab7;
+}
+
+textarea{
+    width:100%;
+    height:120px;
+    margin-top:15px;
+    padding:10px;
+    border-radius:8px;
+    border:1px solid #ccc;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<div class="card">
+
+<h2>📋 Attendance</h2>
+
+<div class="info">
+<span>Date: <span id="date"></span></span>
+</div>
+
+<div style="display:flex; gap:10px; align-items:center;">
+
+<select id="classSelect" style="flex:1;">
+<option value="">Select Class</option>
+
+<option>2nd Year CSM - A Sec</option>
+<option>2nd Year CSM - B Sec</option>
+
+
+<option>3rd Year CSM - A Sec</option>
+
+
+<option>4th Year CSM - A Sec</option>
+<option>4th Year CSM - B Sec</option>
+
+</select>
+
+<button class="action copy-report" onclick="showManageClasses()">
+Manage Classes
+</button>
+
+</div>
+
+<div id="manageBox" style="display:none; margin-top:15px;">
+
+<div class="card">
+
+<h3>Your Classes</h3>
+
+<div id="classList"></div>
+
+<button class="action copy-present" onclick="addClass()">
++ Add New Class
+</button>
+
+<button class="action copy-report" onclick="exportClasses()">
+Export Classes (Backup)
+</button>
+
+<button class="action copy-absent" onclick="importClasses()">
+Import Classes (Restore)
+</button>
+
+</div>
+
+</div>
+
+<button class="action copy-report" onclick="loadStudents()">
+    Load Students
+</button>
+
+<div class="stats">
+<div>✅ Present: <span id="presentCount">66</span></div>
+<div>❌ Absent: <span id="absentCount">0</span></div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="buttons">
+<button class="action copy-present" onclick="copyPresentees()">
+Copy Presentees
+</button>
+
+<button class="action copy-absent" onclick="copyAbsentees()">
+Copy Absentees
+</button>
+
+<button class="action copy-report" onclick="sendWhatsApp()">
+Send in WhatsApp
+</button>
+</div>
+
+<textarea id="preview" readonly></textarea>
+
+</div>
+</div>
+
+<script>
+
+const students = {
+
+"2nd Year CSM - A Sec":[
+        { roll: "258T1A4201", name: "NIYATI" },
+        { roll: "258T1A4202", name: "HARSHA VARDHAN" },
+        { roll: "258T1A4203", name: "RESHMIKA" },
+        { roll: "258T1A4204", name: "VIDYA SAI SRIJA" },
+        { roll: "258T1A4205", name: "LAKSHMANA SAI KARTIKEYA" },
+        { roll: "258T1A4206", name: "RUTHINI" },
+        { roll: "258T1A4207", name: "KAVYA" },
+        { roll: "258T1A4208", name: "PRUDHVI NAGA SAI" },
+        { roll: "258T1A4209", name: "ORSHINI" },
+        { roll: "258T1A4210", name: "BHAVYA BHAVANI" },
+        { roll: "258T1A4211", name: "SAHITHI" },
+        { roll: "258T1A4212", name: "SRI RAMA SWAROOPA" },
+        { roll: "258T1A4213", name: "LAKSHMI NIRANJAN" },
+        { roll: "258T1A4214", name: "AKASH" },
+        { roll: "258T1A4215", name: "JYOTHI ESWAR SAI" },
+        { roll: "258T1A4216", name: "RAMYA SRI" },
+        { roll: "258T1A4217", name: "RATNA KUMARI" },
+        { roll: "258T1A4218", name: "KEERTHANA" },
+        { roll: "258T1A4219", name: "DEVIKA" },
+        { roll: "258T1A4220", name: "SUMA" },
+        { roll: "258T1A4221", name: "SIRI VENKAT" },
+        { roll: "258T1A4222", name: "SATHWIKA" },
+        { roll: "258T1A4223", name: "RAJESWARI" },
+        { roll: "258T1A4224", name: "NAVEEN KUMAR" },
+        { roll: "258T1A4225", name: "MADHU CHANDANA" },
+        { roll: "258T1A4226", name: "PRANITHA" },
+        { roll: "258T1A4227", name: "TEJASWI" },
+        { roll: "258T1A4228", name: "VENKATA LAKSHMI PRASANNA" },
+        { roll: "258T1A4229", name: "CHARAN TEJA" },
+        { roll: "258T1A4230", name: "LAKSHMI PRASANNA" },
+        { roll: "258T1A4231", name: "PAVAN VENKAT CHARAN TEJ" },
+        { roll: "258T1A4232", name: "MOHANA" },
+        { roll: "258T1A4233", name: "SAI SREE" },
+        { roll: "258T1A4234", name: "PAVANI" },
+        { roll: "258T1A4235", name: "SANDHYA RANI" },
+        { roll: "258T1A4236", name: "LAKSHMI SAILAJA" },
+        { roll: "258T1A4237", name: "KUSU HARSHINI" },
+        { roll: "258T1A4238", name: "MOUNIKA" },
+        { roll: "258T1A4239", name: "GAGAN SURENDRA PRAKASH" },
+        { roll: "258T1A4240", name: "PURNA SANTHOSH" },
+        { roll: "258T1A4241", name: "UJWAL" },
+        { roll: "258T1A4242", name: "VENKATA SAIKRISHNA MANIKANTA" },
+        { roll: "258T1A4243", name: "SANJAY" },
+        { roll: "258T1A4244", name: "RAJESH" },
+        { roll: "258T1A4245", name: "GEETHA" },
+        { roll: "258T1A4246", name: "JAGADEESH" },
+        { roll: "258T1A4247", name: "LAKSHMI" },
+        { roll: "258T1A4248", name: "JYOTSNA" },
+        { roll: "258T1A4249", name: "SAMEERA" },
+        { roll: "258T1A4250", name: "RISHITHA" },
+        { roll: "258T1A4251", name: "BHARGAVI" },
+        { roll: "258T1A4252", name: "NANDHA GOPAL" },
+        { roll: "258T1A4253", name: "PAVANI" },
+        { roll: "258T1A4254", name: "HARSHA VARDHINI" },
+        { roll: "258T1A4255", name: "ANUSRI" },
+        { roll: "258T1A4256", name: "JOHN WYCLIFFE SASTRY" },
+        { roll: "258T1A4257", name: "BHASKAR REDDY" },
+        { roll: "258T1A4258", name: "SAMPATH" },
+        { roll: "258T1A4259", name: "SAMUEL PREETHAM CHRISTOPHER" },
+        { roll: "258T1A4260", name: "VIJAY KUMAR" },
+        { roll: "258T1A4261", name: "POORNA SRI" },
+        { roll: "258T1A4262", name: "MEGHANA" },
+        { roll: "258T1A4263", name: "YASWANTH BABU" },
+        { roll: "258T1A4264", name: "MEGHANA" },
+        { roll: "258T1A4265", name: "SAI VARA PRASAD" },
+        { roll: "258T1A4266", name: "LAKSHMI PRASANNA" }
+// add upto 66 students
+],
+
+
+"2nd Year CSM - B Sec":[
+        { roll: "258T1A4267", name: "VARSHA" },
+        { roll: "258T1A4268", name: "PAVITHRA" },
+        { roll: "258T1A4269", name: "ASWANTHU REDDY" },
+        { roll: "258T1A4270", name: "MANIDEEP" },
+        { roll: "258T1A4271", name: "KHAJA MOINUDDIN" },
+        { roll: "258T1A4273", name: "SANA TANWEER" },
+        { roll: "258T1A4274", name: "SAI TEJA" },
+        { roll: "258T1A4275", name: "VENKATA GOPAL REDDY" },
+        { roll: "258T1A4276", name: "JASWANTH" },
+        { roll: "258T1A4277", name: "ROHIT KUMAR CHINNI KRISHNA" },
+        { roll: "258T1A4278", name: "PREETHI" },
+        { roll: "258T1A4279", name: "VENKATA KOWSEEL KUMAR" },
+        { roll: "258T1A4280", name: "VARSHINI" },
+        { roll: "258T1A4281", name: "VEERAVARAPU" },
+        { roll: "258T1A4282", name: "SATWIK" },
+        { roll: "258T1A4283", name: "VARSHINI" },
+        { roll: "258T1A4284", name: "VENKATA NAVEEN" },
+        { roll: "258T1A4285", name: "DHANUSH" },
+        { roll: "258T1A4286", name: "LAKSHMI ISHWARYA" },
+        { roll: "258T1A4287", name: "NAVADEEP REDDY" },
+        { roll: "258T1A4288", name: "BALA SUSHMA" },
+        { roll: "258T1A4289", name: "TEJA RAGHAVA PHANINDRA" },
+        { roll: "258T1A4290", name: "TEJASRI" },
+        { roll: "258T1A4291", name: "SANTHOSH NAGARAJU" },
+        { roll: "258T1A4292", name: "ABHINEETH" },
+        { roll: "258T1A4293", name: "POOJITHA CHOWDARY" },
+        { roll: "258T1A4294", name: "VARUN" },
+        { roll: "258T1A4295", name: "NAKSHATRA" },
+        { roll: "258T1A4296", name: "AMULYA" },
+        { roll: "258T1A4297", name: "HEMA SRI" },
+        { roll: "258T1A4298", name: "MILINDITHA" },
+        { roll: "258T1A4299", name: "THANU SRI" },
+        { roll: "258T1A42A0", name: "RAVITEJA" },
+        { roll: "258T1A42A1", name: "GEESHMITHA" },
+        { roll: "258T1A42A2", name: "RAJASEKHAR REDDY" },
+        { roll: "258T1A42A3", name: "RAGHURAM BHARATH" },
+        { roll: "258T1A42A4", name: "VARSHITHA" },
+        { roll: "258T1A42A5", name: "KHAJABI" },
+        { roll: "258T1A42A6", name: "ARSHIYA" },
+        { roll: "258T1A42A7", name: "HAFSAH BEGUM" },
+        { roll: "258T1A42A8", name: "MUSKAN" },
+        { roll: "258T1A42A9", name: "SHAGUFTA SHAAZ" },
+        { roll: "258T1A42B0", name: "UMMA SHARIKA" },
+        { roll: "258T1A42B1", name: "SIRISHA" },
+        { roll: "258T1A42B2", name: "SAFIYA" },
+        { roll: "258T1A42B3", name: "SADIYA MUSKAN" },
+        { roll: "258T1A42B4", name: "ESTHER RANI" },
+        { roll: "258T1A42B5", name: "JESWINI" },
+        { roll: "258T1A42B6", name: "ANAND" },
+        { roll: "258T1A42B7", name: "NANDA KISHORE" },
+        { roll: "258T1A42B8", name: "VENKATA SUBBA RAO" },
+        { roll: "258T1A42B9", name: "SRI CHANDRIKA" },
+        { roll: "258T1A42C0", name: "GOWTHAMI" },
+        { roll: "258T1A42C1", name: "PRAVALLIKA" },
+        { roll: "258T1A42C2", name: "TEJASWI" },
+        { roll: "258T1A42C3", name: "SAI RAM" },
+        { roll: "258T1A42C4", name: "SRI SANTHI" },
+        { roll: "258T1A42C5", name: "PHANI SARMA" },
+        { roll: "258T1A42C6", name: "KOTESWARA RAO" },
+        { roll: "258T1A42C7", name: "SUCHARITHA" },
+        { roll: "258T1A42C8", name: "DHANUSH KUMAR" },
+        { roll: "258T1A42C9", name: "DINESH KARTHIK" },
+// add upto 66 students
+],
+
+
+"3rd Year CSM - A Sec":[
+        { roll: "238T1A4214", name: "BONTHU PURANDHAR REDDY" },
+        { roll: "248T1A4201", name: "BAINA BOINA SIREESHA" },
+        { roll: "248T1A4202", name: "BANDA PARIMALA" },
+        { roll: "248T1A4203", name: "BEVARA LAVANYA" },
+        { roll: "248T1A4204", name: "BHASHITHA CHENNU" },
+        { roll: "248T1A4205", name: "BALUSU HANSHITHA CHOWDARY" },
+        { roll: "248T1A4206", name: "BOGGAVARAPU B V L N S MANIDEEPIKA" },
+        { roll: "248T1A4207", name: "BOMMAREDDY DURGA PAVANI" },
+        { roll: "248T1A4208", name: "CHATLA HARSHA VARDHAN" },
+        { roll: "248T1A4209", name: "CHILAKALAPUDI JAHNAVI" },
+        { roll: "248T1A4210", name: "CHILUKOTI SARATH" },
+        { roll: "248T1A4211", name: "DIRISANA NIMILITHA NETHRI" },
+        { roll: "248T1A4212", name: "DOKKU JAYASREE" },
+        { roll: "248T1A4213", name: "DUKKA RAJESH" },
+        { roll: "248T1A4214", name: "GUJJULA MADHU SRI ASHVITHA" },
+        { roll: "248T1A4215", name: "JAMPANI HARSHITHA" },
+        { roll: "248T1A4216", name: "JERRIPOTHULA MANOJ KUMAR" },
+        { roll: "248T1A4217", name: "KAKOLLU KOUSHIK" },
+        { roll: "248T1A4218", name: "KALLEPALLI AKASH" },
+        { roll: "248T1A4219", name: "KAMPLI SAYYED FAYEEK" },
+        { roll: "248T1A4220", name: "KARASANI MOUNIKA" },
+        { roll: "248T1A4221", name: "KARUPARTHY PAVANI KEDARESWARI DEVI" },
+        { roll: "248T1A4222", name: "KODALI SIDDHARTHA" },
+        { roll: "248T1A4223", name: "KOMMALAPATI HARI PRIYA" },
+        { roll: "248T1A4224", name: "KONA DURGA RAM SAI RUTHVIK" },
+        { roll: "248T1A4225", name: "LANKA HARSHINI" },
+        { roll: "248T1A4226", name: "MADAKA NAVEEN KUMAR" },
+        { roll: "248T1A4227", name: "MADINENI HANSIKA" },
+        { roll: "248T1A4228", name: "MAKARLA CHAHNITHA" },
+        { roll: "248T1A4229", name: "MATTA DIVYA JYOTHI" },
+        { roll: "248T1A4230", name: "MATTA VENKATA VEERA NAGA VARA PRASAD" },
+        { roll: "248T1A4231", name: "MD KALESHA KARIMULLAH SHAUKAT ALI" },
+        { roll: "248T1A4232", name: "MODI RAAGADEEPIKA" },
+        { roll: "248T1A4233", name: "MOHAMMAD AYESHA SIDDIQA" },
+        { roll: "248T1A4234", name: "MOTAMARRI SUNNY" },
+        { roll: "248T1A4235", name: "MUDAMANASU DHANALAKSHMI" },
+        { roll: "248T1A4236", name: "MUDRAGADDA RAJANI RUPA" },
+        { roll: "248T1A4237", name: "MULLANGI JYOTHI SWAROOP REDDY" },
+        { roll: "248T1A4238", name: "MUTRAPU GANESH" },
+        { roll: "248T1A4239", name: "MUTRAPU NAGA MALLESWARA RAO" },
+        { roll: "248T1A4240", name: "NAIDU PURANDESWARI" },
+        { roll: "248T1A4241", name: "NAKKA VAMSI KRISHNA" },
+        { roll: "248T1A4242", name: "NULI AMARANATH" },
+        { roll: "248T1A4243", name: "OBILISETTI PUJITHA" },
+        { roll: "248T1A4244", name: "VAMSI TEJA PODILI" },
+        { roll: "248T1A4245", name: "PATAN SHAHINA" },
+        { roll: "248T1A4246", name: "PATHAN ASHRAF ALI KHAN" },
+        { roll: "248T1A4247", name: "PATHAN SAMEENA KOWSAR" },
+        { roll: "248T1A4248", name: "PELURI CHAITANYA NAGA SAI" },
+        { roll: "248T1A4249", name: "POLOJU HARI VAMSI KRISHNA" },
+        { roll: "248T1A4250", name: "PONUKUMATI HARI NADH" },
+        { roll: "248T1A4251", name: "PRODDUTURU ABHISHEK" },
+        { roll: "248T1A4252", name: "SALLAGUNDLA LAKSHMI SRI HARSHA" },
+        { roll: "248T1A4253", name: "SHAIK AMIN SALAM" },
+        { roll: "248T1A4254", name: "SHAIK JASMINE" },
+        { roll: "248T1A4255", name: "SHAIK SABERA" },
+        { roll: "248T1A4256", name: "SHAIK TANIYA JASMIN" },
+        { roll: "248T1A4257", name: "SHAIK THASLIMA" },
+        { roll: "248T1A4258", name: "SIDDAMSETTY KOMALI" },
+        { roll: "248T1A4259", name: "SURA SHANMUKA PRIYA" },
+        { roll: "248T1A4260", name: "UNDURTHI AKHIL" },
+        { roll: "248T1A4261", name: "VADALASETTY PUJITHA" },
+        { roll: "248T1A4262", name: "VALLURU KOWSHIK" },
+        { roll: "248T1A4263", name: "VELIVELA VENKATA SAI PRASANNA" },
+        { roll: "248T1A4264", name: "VISWANADHAPALLI SRAVANI MAHALAKSHMI" },
+        { roll: "258T5A4201", name: "BORRA GOWTHAM RAJ" },
+        { roll: "258T5A4202", name: "DUBA HONEY" },
+        { roll: "258T5A4203", name: "KOLLIPARA SUBHASH" },
+        { roll: "258T5A4204", name: "PALIKA LAKSHMI DURGA POCHA NIHARIKA" },
+        { roll: "258T5A4205", name: "PASUPULETI VYSHNAVI" },
+        { roll: "258T5A4206", name: "SADU KISHORE" },
+        { roll: "258T5A4207", name: "TERLI SYAM" }
+// add students
+],
+
+"4th Year CSM - A Sec":[
+        { roll: "238T1A4201", name: "AALLA YAMINI RAMA SRI VAISHNAVI" },
+        { roll: "238T1A4202", name: "ABDUL MUZEEB" },
+        { roll: "238T1A4203", name: "ABHIGNA SRI VARAKALA" },
+        { roll: "238T1A4204", name: "ADIRALA SANDEEP KUMAR" },
+        { roll: "238T1A4205", name: "ADUSUMILLI JYOTHIRADITHYA" },
+        { roll: "238T1A4206", name: "AKUNURI MANMADH" },
+        { roll: "238T1A4207", name: "AMARANGABAD JYOTHI" },
+        { roll: "238T1A4208", name: "BANDI VIVEK" },
+        { roll: "238T1A4209", name: "BEERAM NAVYA" },
+        { roll: "238T1A4210", name: "BELLAMKONDA KARTHIKEYA" },
+        { roll: "238T1A4211", name: "BHIMANA DEVARSHA KRISHNAVARDHAN" },
+        { roll: "238T1A4212", name: "BODEPUDI VARUN TEJA" },
+        { roll: "238T1A4213", name: "BONDALAPATI BHANU PRAKASH" },
+        { roll: "238T1A4215", name: "BUREPALLI SWAPNA" },
+        { roll: "238T1A4216", name: "CHAKIRI PUJITHA" },
+        { roll: "238T1A4217", name: "CHAKKA SOMA SEKHAR" },
+        { roll: "238T1A4218", name: "PUNEET SAI CHALADI" },
+        { roll: "238T1A4219", name: "CHAVALA HARISH KUMAR" },
+        { roll: "238T1A4220", name: "CHEBATHINA ASWINI" },
+        { roll: "238T1A4221", name: "CHERUKU VINAY KUMAR REDDY" },
+        { roll: "238T1A4222", name: "CHIGULURI PARDHAVIKA" },
+        { roll: "238T1A4223", name: "CHINNI OMKAR SAI" },
+        { roll: "238T1A4224", name: "CHITTA NAGA VENKATA LAKSHMI AKHILA" },
+        { roll: "238T1A4225", name: "DASARI NIHARIKA" },
+        { roll: "238T1A4226", name: "DEEVI KANCHANA NAGA LAKSHMI" },
+        { roll: "238T1A4227", name: "DEVINENI TEJA" },
+        { roll: "238T1A4228", name: "DIGUMARTHI GOPICHAND" },
+        { roll: "238T1A4229", name: "DIVVELA BHARATH" },
+        { roll: "238T1A4230", name: "DUNGALA V S KARTHIKEYA" },
+        { roll: "238T1A4231", name: "ETTUKURI KALYAN KUMAR" },
+        { roll: "238T1A4232", name: "GALLA HARSHITHA" },
+        { roll: "238T1A4233", name: "GANNAMANENI LAKSHMI PRIYANKA" },
+        { roll: "238T1A4234", name: "GARAPATI DHARMA TEJA" },
+        { roll: "238T1A4235", name: "GEDELA NAGA RAJU" },
+        { roll: "238T1A4236", name: "GOLLA SRIVATHSAVA YADAV" },
+        { roll: "238T1A4237", name: "GUDALA MOHANA RUPA" },
+        { roll: "238T1A4238", name: "GUMMIDI SATISH KUMAR" },
+        { roll: "238T1A4239", name: "HIMA HARSHITHA JANJANAM" },
+        { roll: "238T1A4240", name: "IJJADA DHAKSHAYANI" },
+        { roll: "238T1A4241", name: "JANDRAJUPALLI DIVYA" },
+        { roll: "238T1A4242", name: "JANJANAM LAVANYA" },
+        { roll: "238T1A4243", name: "JONNAKUTI PHANI BABU" },
+        { roll: "238T1A4244", name: "KADIYALA PREM CHAND" },
+        { roll: "238T1A4245", name: "KARI JAHNAVI" },
+        { roll: "238T1A4246", name: "KARIMISETTY DEELESWARI" },
+        { roll: "238T1A4248", name: "KASIMKOTA MOHAN" },
+        { roll: "238T1A4249", name: "KELAM MAHANI KOUSHAL REDDY" },
+        { roll: "238T1A4250", name: "KESIBOYINA CHANDRIKA" },
+        { roll: "238T1A4251", name: "KESINENI RAVITEJ" },
+        { roll: "238T1A4252", name: "KILLAMPALLI YASWANTH VARDHAN" },
+        { roll: "238T1A4253", name: "KODURI CHARAN" },
+        { roll: "238T1A4254", name: "KOLLI LAHARISH CHOWDARY" },
+        { roll: "238T1A4255", name: "KONADA SAI KEERTHANA" },
+        { roll: "238T1A4256", name: "KONDETI AVINASH" },
+        { roll: "238T1A4257", name: "KOTHURU HARSHITHA" },
+        { roll: "238T1A4258", name: "KUCHIPUDI ROHINI SAI" },
+        { roll: "238T1A4259", name: "KURAPATI LIKHITHA MANI" },
+        { roll: "238T1A4260", name: "KUSAM VIPUL" },
+        { roll: "238T1A4261", name: "LAM PRIYANKA" },
+        { roll: "238T1A4262", name: "LANKAPALLI EBBEJU" },
+        { roll: "238T1A4263", name: "MADU ARUN KUMAR" },
+        { roll: "238T1A4264", name: "MAGANTI PURNA VENKATESH" },
+        { roll: "238T1A4265", name: "MANEM BINDU MADHAVI" },
+        { roll: "238T1A4266", name: "MINDELA DEDEEPYA" },
+        { roll: "248T5A4202", name: "DINTAKURTHI SURYA" },
+        { roll: "248T5A4203", name: "KONAKALLA DARAHAS" },
+        { roll: "248T5A4204", name: "MANDAVA VIJAYAENDRA CHOWDARY" },
+        { roll: "248T5A4205", name: "MARAM MANOJ KUMAR" },
+        { roll: "248T5A4206", name: "MULLAPUDI HARSHA VARDHAN" }
+// add upto 66 students
+],
+
+
+"4th Year CSM - B Sec":[
+        { roll: "238T1A4267", name: "MANDAPATI LAKSHMANKUMAR REDDY" },
+        { roll: "238T1A4268", name: "MANIKONDA SNEHA" },
+        { roll: "238T1A4269", name: "MARAGANI HARSHITH" },
+        { roll: "238T1A4270", name: "MATTA RIKITH" },
+        { roll: "238T1A4271", name: "MATTE JASWANTH" },
+        { roll: "238T1A4272", name: "MOHAMMAD ARIF" },
+        { roll: "238T1A4273", name: "MOHAMMAD RESHMA" },
+        { roll: "238T1A4274", name: "MOHAMMAD TAUSEEF AZHAR" },
+        { roll: "238T1A4275", name: "MUDAVATHU TRISHA" },
+        { roll: "238T1A4276", name: "MUNAGALA SIVA MADHAVI" },
+        { roll: "238T1A4277", name: "MURARI SHARMILA" },
+        { roll: "238T1A4278", name: "MUTHE PRAVALLIKA" },
+        { roll: "238T1A4279", name: "MUTHYALA JAYA VARDHAN" },
+        { roll: "238T1A4280", name: "MYNAMPATI JAYANTH" },
+        { roll: "238T1A4281", name: "MYNENI HEMASAI PAVAN KUMAR" },
+        { roll: "238T1A4282", name: "NAGA SAI TRINAYA CHALUVADI" },
+        { roll: "238T1A4283", name: "NUTHAKKI ESHITHA" },
+        { roll: "238T1A4284", name: "OGIRALA SRIVALLI" },
+        { roll: "238T1A4285", name: "OLETI VANI NAGA TEJASWINI" },
+        { roll: "238T1A4286", name: "PALLA POORNIMA" },
+        { roll: "238T1A4287", name: "PAMARTI GNANA DEEPIKA" },
+        { roll: "238T1A4288", name: "PAPOLU YASASWINI SAI SRI" },
+        { roll: "238T1A4289", name: "SEETHAMRAJU LALITHA KALYANI SAHITYA" },
+        { roll: "238T1A4290", name: "PEETHA LAVANYA" },
+        { roll: "238T1A4291", name: "PONNAMANDA NANDA GOPAL" },
+        { roll: "238T1A4292", name: "POTHARLANKA SIRISHA" },
+        { roll: "238T1A4293", name: "POTLABATHINA SYAMALA" },
+        { roll: "238T1A4294", name: "POTLURI NAGA SAI MAHITHA" },
+        { roll: "238T1A4295", name: "PUPPALA HARSHITHA" },
+        { roll: "238T1A4296", name: "PUTTUPU CHAMALY" },
+        { roll: "238T1A4297", name: "R MEGHANA" },
+        { roll: "238T1A4298", name: "RAJULAPATI BALA JAHNAVI" },
+        { roll: "238T1A4299", name: "RANGA LIKITH KUMAR" },
+        { roll: "238T1A42A0", name: "SADAM MAHALAKSHMI" },
+        { roll: "238T1A42A1", name: "SANKA VARSHINI" },
+        { roll: "238T1A42A2", name: "SARAYU BHUPATHI" },
+        { roll: "238T1A42A3", name: "SARIHADDU KALYANI" },
+        { roll: "238T1A42A4", name: "SARIPALLI CHANDRIKA" },
+        { roll: "238T1A42A5", name: "SHAIK AASIN" },
+        { roll: "238T1A42A6", name: "SHAIK NADEEM AHMAD" },
+        { roll: "238T1A42A7", name: "SHAIK RIZWANA" },
+        { roll: "238T1A42A8", name: "SHAIK SANIA MEHAK" },
+        { roll: "238T1A42A9", name: "SHAIK SHANAAZ" },
+        { roll: "238T1A42B0", name: "SPURTHI MOURYA TEJA" },
+        { roll: "238T1A42B1", name: "SUDANI KRUSHMA" },
+        { roll: "238T1A42B2", name: "SURI DEEPIKA" },
+        { roll: "238T1A42B3", name: "SUVARNAKANTI SARATH CHANDRA" },
+        { roll: "238T1A42B4", name: "TAMIRI RAJA SEKHAR" },
+        { roll: "238T1A42B5", name: "TAMMA KUNDANA REDDY" },
+        { roll: "238T1A42B6", name: "THOTA LINSIKA" },
+        { roll: "238T1A42B7", name: "THOTTEMPUDI SRI NITHYA CHOWDARY" },
+        { roll: "238T1A42B8", name: "UPPU DIVYA" },
+        { roll: "238T1A42B9", name: "UPPULURI JAYADITHYA" },
+        { roll: "238T1A42C0", name: "VAKA GAYATHRI" },
+        { roll: "238T1A42C1", name: "VAKKALAGADDA REKHA SAI SRI" },
+        { roll: "238T1A42C2", name: "VANKAYALAPATI MERCY JHASPER" },
+        { roll: "238T1A42C3", name: "VEERLA SATYA DEV" },
+        { roll: "238T1A42C4", name: "VELAGAPUDI NAINISHA" },
+        { roll: "238T1A42C5", name: "VENNAPUSALA UDAYKIRAN REDDY" },
+        { roll: "238T1A42C6", name: "VENTRAPRAGADA CHETAN S S S GURUNADHA SARMA" },
+        { roll: "238T1A42C7", name: "VURUKONDA DUNDI CHARITHA" },
+        { roll: "238T1A42C8", name: "YAGATEELA NAGA SASI VARDHAN" },
+        { roll: "238T1A42C9", name: "YALAMANCHILI MRUDHULA" },
+        { roll: "238T1A42D0", name: "YAMA HANSIKA SAI SRUJANA" },
+        { roll: "238T1A42D1", name: "YATTAPU SRAVANI" },
+        { roll: "238T1A42D2", name: "YUDDAMSETTI KARTHIK BABU" },
+        { roll: "248T5A4207", name: "PASUPULETI CHANDRIKA" },
+        { roll: "248T5A4208", name: "PRASANNA THANGETI" },
+        { roll: "248T5A4209", name: "RELLI MOHAN" },
+        { roll: "248T5A4210", name: "SHAIK GOUSE" },
+        { roll: "248T5A4211", name: "SHAIK MUSTAFA" },
+        { roll: "248T5A4212", name: "UPPALAPATI SASI KIRAN" }
+// add upto 66 students
+],
+
+};
+
+
+let currentStudents=[];
+
+const absentSet = new Set();
+
+const grid = document.getElementById("grid");
+
+const today = new Date();
+const dd = String(today.getDate()).padStart(2,'0');
+const mm = String(today.getMonth()+1).padStart(2,'0');
+const yyyy = today.getFullYear();
+
+document.getElementById("date").textContent =
+`${dd}/${mm}/${yyyy}`;
+
+function displayNumber(index){
+
+let n=index+1;
+
+
+if(n<=99){
+return String(n).padStart(2,"0");
+}
+
+
+n=n-100;
+
+let letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+return letters[Math.floor(n/10)] + (n%10);
+
+}
+
+
+
+function loadStudents(){
+
+    let selected = document.getElementById("classSelect").value;
+
+    currentStudents = students[selected] || [];
+
+    grid.innerHTML = "";
+
+    absentSet.clear();
+
+
+    currentStudents.forEach((student,index)=>{
+
+        let btn = document.createElement("button");
+
+        btn.className="roll";
+
+        // show last two digits of roll number
+        btn.textContent = student.roll.slice(-2);
+
+
+        btn.onclick=()=>{
+
+            if(absentSet.has(index)){
+
+                absentSet.delete(index);
+                btn.classList.remove("absent");
+
+            }
+            else{
+
+                absentSet.add(index);
+                btn.classList.add("absent");
+
+            }
+
+            updateCounts();
+
+        };
+
+
+        grid.appendChild(btn);
+
+    });
+
+
+    updateCounts();
+
+}
+
+grid.innerHTML = "";
+
+//document.getElementById("classSelect")
+//.onchange=loadStudents;
+
+
+//loadStudents();
+
+function updateCounts(){
+
+    const absent=absentSet.size;
+    const present=currentStudents.length-absent;
+
+    document.getElementById("presentCount").textContent=present;
+    document.getElementById("absentCount").textContent=absent;
+
+    generatePreview();
+}
+
+function getPresentees(){
+
+    let arr=[];
+
+    for(let i=0;i<currentStudents.length;i++){
+        if(!absentSet.has(i)){
+            arr.push(currentStudents[i].roll.slice(-2));
+        }
+    }
+
+    return arr;
+}
+
+function getAbsentees(){
+
+    return [...absentSet]
+    .sort((a,b)=>a-b)
+    .map(i=>currentStudents[i].roll.slice(-2));
+
+}
+
+function copyPresentees(){
+
+    const text=getPresentees().join(", ");
+
+    navigator.clipboard.writeText(text);
+
+    alert("Presentees copied");
+}
+
+function copyAbsentees(){
+
+    const text=getAbsentees().join(", ");
+
+    navigator.clipboard.writeText(text);
+
+    alert("Absentees copied");
+}
+
+function generateReport(){
+
+    const cls=document.getElementById("classSelect").value;
+
+    const presentees=getPresentees();
+    const absentees=getAbsentees();
+
+    return `*Attendance Report*
+*Date:* ${dd}/${mm}/${yyyy}
+*Class:* ${cls}
+*Total Students:* ${currentStudents.length}
+
+*Presentees:* ${presentees.length}
+*Presentees Roll Numbers:*
+${presentees.join(", ")}
+
+*Absentees:* ${absentees.length}
+*Absentee Roll Numbers:*
+${absentees.join(", ")}`;
+}
+
+function copyReport(){
+
+    const report=generateReport();
+
+    navigator.clipboard.writeText(report);
+
+    alert("Attendance report copied");
+}
+
+function sendWhatsApp(){
+
+    const report = generateReport();
+
+    const whatsappURL = 
+    "https://wa.me/?text=" + encodeURIComponent(report);
+
+    window.open(whatsappURL, "_blank");
+
+}
+
+function generatePreview(){
+    document.getElementById("preview").value=
+    generateReport();
+}
+
+generatePreview();
+
+function showManageClasses(){
+
+    let box=document.getElementById("manageBox");
+
+    if(box.style.display==="none"){
+        box.style.display="block";
+        displayClasses();
+    }
+    else{
+        box.style.display="none";
+    }
+
+}
+
+
+function displayClasses(){
+
+    let list=document.getElementById("classList");
+
+    list.innerHTML="";
+
+
+    Object.keys(students).forEach(cls=>{
+
+
+        let div=document.createElement("div");
+
+        div.style.padding="10px";
+        div.style.borderBottom="1px solid #ddd";
+
+
+        div.innerHTML=`
+
+        <b>${cls}</b><br>
+
+        ${students[cls].length} students · 1 roll group
+
+        <br>
+
+        <button onclick="editClass('${cls}')">
+        Edit
+        </button>
+
+        <button onclick="deleteClass('${cls}')">
+        Delete
+        </button>
+
+        `;
+
+
+        list.appendChild(div);
+
+
+    });
+
+
+}
+
+
+function addClass(){
+
+    let name=prompt("Enter Class Name:");
+
+    if(name){
+
+        students[name]=[];
+
+        displayClasses();
+
+    }
+
+}
+
+
+
+function deleteClass(cls){
+
+    if(confirm("Delete "+cls+" ?")){
+
+        delete students[cls];
+
+        displayClasses();
+
+    }
+
+}
+
+
+
+function editClass(cls){
+
+    alert("Edit students for "+cls);
+
+}
+
+
+
+function exportClasses(){
+
+    let data=JSON.stringify(students);
+
+    let blob=new Blob([data],{type:"application/json"});
+
+    let a=document.createElement("a");
+
+    a.href=URL.createObjectURL(blob);
+
+    a.download="classes_backup.json";
+
+    a.click();
+
+}
+
+
+
+function importClasses(){
+
+    alert("Import option can be added using file upload");
+
+}
+
+</script>
+
+</body>
+</html>
