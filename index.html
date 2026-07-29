@@ -718,11 +718,21 @@ grid.innerHTML = "";
 
 function updateCounts(){
 
-    const absent=absentSet.size;
-    const present=currentStudents.length-absent;
+    const absent = absentSet.size;
+    const present = currentStudents.length - absent;
 
-    document.getElementById("presentCount").textContent=present;
-    document.getElementById("absentCount").textContent=absent;
+    const cls = document.getElementById("classSelect").value;
+
+    const extraStudents = specialStudents[cls]
+        ? specialStudents[cls].length
+        : 0;
+
+
+    document.getElementById("presentCount").textContent =
+        present + extraStudents;
+
+    document.getElementById("absentCount").textContent =
+        absent;
 
     generatePreview();
 }
@@ -987,7 +997,7 @@ function generateReport(){
 return `*Attendance*
 *Date:* ${dd}/${mm}/${yyyy}
 *Class:* ${cls}
-*Total Students:* ${currentStudents.length}
+*Total Students:* ${currentStudents.length + (specialStudents[cls] ? specialStudents[cls].length : 0)}
 
 *Presentees:* ${presentees.regular.length + presentees.lateral.length}
 ${presentText}
