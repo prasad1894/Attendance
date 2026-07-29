@@ -927,59 +927,61 @@ else if(cls.includes("B Sec")){
 
 function generateReport(){
 
-    const cls=document.getElementById("classSelect").value;
+    const cls = document.getElementById("classSelect").value;
 
+    const presentees = getPresentees();
+    const absentees = getAbsentees();
 
-    const presentees=getPresentees();
-    const absentees=getAbsentees();
+    let presentText = "";
 
-
-    let presentText="";
-
-    if(presentees.regular.length>0){
+    if(presentees.regular.length > 0){
         presentText += presentees.regular.join(", ");
     }
 
+    if(presentees.lateral.length > 0){
 
-    if(presentees.lateral.length>0){
+        if(presentText !== ""){
+            presentText += "\n";
+        }
 
-    presentText += "\nLE's:- ";
-    presentText += presentees.lateral.join(", ");
+        presentText += "LE's:- ";
+        presentText += presentees.lateral.join(", ");
 
-}
-
-
-// detained students full roll number
-
-
-if(specialStudents[cls]){
-
-    presentText += "\n\nDetained Students:- ";
-
-    presentText += specialStudents[cls]
-    .map(s => s.roll)
-    .join(", ");
-
-}
+    }
 
 
+    // Add detained student full roll number
+    let detainedText = "";
 
-    let absentText="";
+    if(specialStudents[cls]){
 
-    if(absentees.regular.length>0){
+        detainedText = "\nOther Student:-\n";
+
+        detainedText += specialStudents[cls]
+        .map(s => s.roll)
+        .join(", ");
+
+    }
+
+
+    let absentText = "";
+
+    if(absentees.regular.length > 0){
 
         absentText += absentees.regular.join(", ");
 
     }
 
+    if(absentees.lateral.length > 0){
 
-    if(absentees.lateral.length>0){
+        if(absentText !== ""){
+            absentText += "\n";
+        }
 
-        absentText += "\nLE's:- ";
+        absentText += "LE's:- ";
         absentText += absentees.lateral.join(", ");
 
     }
-
 
 
 return `*Attendance*
@@ -989,6 +991,7 @@ return `*Attendance*
 
 *Presentees:* ${presentees.regular.length + presentees.lateral.length}
 ${presentText}
+${detainedText}
 
 *Absentees:* ${absentees.regular.length + absentees.lateral.length}
 ${absentText}`;
