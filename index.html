@@ -362,7 +362,7 @@ const students = {
 
 
 "3rd Year CSM - A Sec":[
-        { roll: "238T1A4214", name: "BONTHU PURANDHAR REDDY" },
+        
         { roll: "248T1A4201", name: "BAINA BOINA SIREESHA" },
         { roll: "248T1A4202", name: "BANDA PARIMALA" },
         { roll: "248T1A4203", name: "BEVARA LAVANYA" },
@@ -589,6 +589,15 @@ const students = {
 
 };
 
+const specialStudents = {
+    "3rd Year CSM - A Sec": [
+        {
+            roll: "238T1A4214",
+            name: "BONTHU PURANDHAR REDDY"
+        }
+    ]
+};
+    
 const scriptURL = "https://script.google.com/macros/s/AKfycbzvIvlq-7gyag7Ip2IeBsWx7YemcGh5Gr5NV6CvzUQtUhO2_gnb1ATREcwpkZ-WW_e4CA/exec";
 
 let currentStudents=[];
@@ -939,10 +948,24 @@ function generateReport(){
 
     if(presentees.lateral.length>0){
 
-        presentText += "\nLE's:- ";
-        presentText += presentees.lateral.join(", ");
+    presentText += "\nLE's:- ";
+    presentText += presentees.lateral.join(", ");
 
-    }
+}
+
+
+// detained students full roll number
+const cls = document.getElementById("classSelect").value;
+
+if(specialStudents[cls]){
+
+    presentText += "\n\nDetained Students:- ";
+
+    presentText += specialStudents[cls]
+    .map(s => s.roll)
+    .join(", ");
+
+}
 
 
 
