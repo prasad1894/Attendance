@@ -756,7 +756,14 @@ function saveAttendance(){
     }
 
 
-    let section = cls.replace(year + " CSM - ", "");
+let section = "";
+
+if(cls.includes("A Sec")){
+    section = "CSM-A";
+}
+else if(cls.includes("B Sec")){
+    section = "CSM-B";
+}
 
 
     const data = {
