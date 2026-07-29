@@ -965,13 +965,13 @@ function generateReport(){
 
     if(specialStudents[cls]){
 
-        detainedText = "\nOther Student:-\n";
+    presentText += "\nOther Student:-\n";
 
-        detainedText += specialStudents[cls]
-        .map(s => s.roll)
-        .join(", ");
+    specialStudents[cls].forEach(s => {
+        presentText += s.roll + " - " + s.name + "\n";
+    });
 
-    }
+}
 
 
     let absentText = "";
