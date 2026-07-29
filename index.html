@@ -209,6 +209,10 @@ Copy Absentees
     💾 Save Attendance
 </button>
 
+<button class="action copy-report" onclick="copyReport()">
+Copy Report
+</button>
+
 <button class="action copy-report" onclick="sendWhatsApp()">
 Send in WhatsApp
 </button>
@@ -767,27 +771,18 @@ function getAbsentees(){
 
 function sendWhatsApp(){
 
-    if(currentStudents.length === 0){
+    if(currentStudents.length===0){
         alert("Please select class and load students first");
         return;
     }
 
     const report = generateReport();
 
-    if(!report){
-        alert("Report generation failed");
-        return;
-    }
+    const whatsappURL =
+    "https://wa.me/?text=" + encodeURIComponent(report);
 
-    const whatsappURL = 
-    "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
+    window.open(whatsappURL,"_blank");
 
-    window.open(whatsappURL, "_blank");
-
-}
-
-function sendWhatsApp(){
-    alert(generateReport());
 }
 
 function getPresentees(){
@@ -1009,16 +1004,6 @@ function copyReport(){
     alert("Attendance report copied");
 }
 
-function sendWhatsApp(){
-
-    const report = generateReport();
-
-    const whatsappURL = 
-    "https://wa.me/?text=" + encodeURIComponent(report);
-
-    window.open(whatsappURL, "_blank");
-
-}
 
 function generatePreview(){
 
