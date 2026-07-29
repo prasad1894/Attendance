@@ -594,14 +594,6 @@ const students = {
 
 };
 
-const specialStudents = {
-    "3rd Year CSM - A Sec": [
-        {
-            roll: "238T1A4214",
-            name: "BONTHU PURANDHAR REDDY"
-        }
-    ]
-};
     
 const scriptURL = "https://script.google.com/macros/s/AKfycbzvIvlq-7gyag7Ip2IeBsWx7YemcGh5Gr5NV6CvzUQtUhO2_gnb1ATREcwpkZ-WW_e4CA/exec";
 
@@ -672,10 +664,13 @@ for(let j=0; j<=index; j++){
 }
 
 
-if(student.roll.includes("T5A")){
+if (student.roll === "238T1A4214") {
+    btn.textContent = "Other";
+}
+else if (student.roll.includes("T5A")) {
     btn.textContent = "LE-" + leCount;
 }
-else{
+else {
     btn.textContent = count;
 }
 
@@ -966,7 +961,7 @@ function generateReport(){
 
     if(specialStudents[cls]){
 
-    presentText += "\nOther Student:-\n";
+    presentText += "Other Student:-";
 
     specialStudents[cls].forEach(s => {
         presentText += s.roll + " - " + s.name + "\n";
