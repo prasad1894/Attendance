@@ -132,24 +132,23 @@ textarea{
 
 <div style="display:flex; gap:10px; align-items:center;">
 
-<select id="classSelect" style="flex:1;">
-<option value="">Select Class</option>
+    <select id="classSelect" style="flex:1;">
+        <option value="">Select Class</option>
 
-<option>2nd Year CSM - A Sec</option>
-<option>2nd Year CSM - B Sec</option>
+        <option>2nd Year CSM - A Sec</option>
+        <option>2nd Year CSM - B Sec</option>
+        <option>3rd Year CSM - A Sec</option>
+        <option>4th Year CSM - A Sec</option>
+        <option>4th Year CSM - B Sec</option>
+    </select>
 
+    <button class="action copy-present" onclick="loadStudents()">
+        Load Students
+    </button>
 
-<option>3rd Year CSM - A Sec</option>
-
-
-<option>4th Year CSM - A Sec</option>
-<option>4th Year CSM - B Sec</option>
-
-</select>
-
-<button class="action copy-report" onclick="showManageClasses()">
-Manage Classes
-</button>
+    <button class="action copy-report" onclick="showManageClasses()">
+        Manage Classes
+    </button>
 
 </div>
 
@@ -177,9 +176,7 @@ Import Classes (Restore)
 
 </div>
 
-<button class="action copy-report" onclick="loadStudents()">
-    Load Students
-</button>
+
 
 <div class="stats">
 <div>✅ Present: <span id="presentCount">66</span></div>
