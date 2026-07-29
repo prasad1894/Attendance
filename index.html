@@ -643,7 +643,27 @@ function loadStudents(){
         btn.className="roll";
 
         // show last two digits of roll number
-        btn.textContent = student.roll.slice(-2);
+        let count = 0;
+let leCount = 0;
+
+for(let j=0; j<=index; j++){
+
+    if(currentStudents[j].roll.includes("T5A")){
+        leCount++;
+    }
+    else{
+        count++;
+    }
+
+}
+
+
+if(student.roll.includes("T5A")){
+    btn.textContent = "LE-" + leCount;
+}
+else{
+    btn.textContent = count;
+}
 
 
         btn.onclick=()=>{
@@ -694,17 +714,46 @@ function updateCounts(){
     generatePreview();
 }
 
-function getPresentees(){
+function getAbsentees(){
 
-    let arr=[];
+    let regular = [];
+    let lateral = [];
 
-    for(let i=0;i<currentStudents.length;i++){
-        if(!absentSet.has(i)){
-            arr.push(currentStudents[i].roll.slice(-2));
+    [...absentSet]
+    .sort((a,b)=>a-b)
+    .forEach(i=>{
+
+        let student = currentStudents[i];
+
+        if(student.roll.includes("T5A")){
+
+            let leNo = currentStudents
+            .slice(0,i+1)
+            .filter(s=>s.roll.includes("T5A"))
+            .length;
+
+            lateral.push(leNo);
+
         }
-    }
+        else{
 
-    return arr;
+            let regNo = currentStudents
+            .slice(0,i+1)
+            .filter(s=>!s.roll.includes("T5A"))
+            .length;
+
+            regular.push(regNo);
+
+        }
+
+    });
+
+
+    return {
+        regular:regular,
+        lateral:lateral
+    };
+
 }
 
 function getAbsentees(){
@@ -715,6 +764,50 @@ function getAbsentees(){
 
 }
 
+function getPresentees(){
+
+    let regular=[];
+    let lateral=[];
+
+
+    currentStudents.forEach((student,index)=>{
+
+        if(!absentSet.has(index)){
+
+
+            if(student.roll.includes("T5A")){
+
+                let leNo=currentStudents
+                .slice(0,index+1)
+                .filter(s=>s.roll.includes("T5A"))
+                .length;
+
+                lateral.push(leNo);
+
+            }
+            else{
+
+                let regNo=currentStudents
+                .slice(0,index+1)
+                .filter(s=>!s.roll.includes("T5A"))
+                .length;
+
+                regular.push(regNo);
+
+            }
+
+        }
+
+    });
+
+
+    return {
+        regular:regular,
+        lateral:lateral
+    };
+
+}
+    
 function copyPresentees(){
 
     const text=getPresentees().join(", ");
@@ -815,21 +908,63 @@ function generateReport(){
 
     const cls=document.getElementById("classSelect").value;
 
+
     const presentees=getPresentees();
     const absentees=getAbsentees();
 
-    return `*Attendance Report*
+
+    let presentText="";
+
+    if(presentees.regular.length>0){
+        presentText += presentees.regular.join("  ");
+    }
+
+
+    if(presentees.lateral.length>0){
+
+        presentText += "\n\nLE's:- ";
+        presentText += presentees.lateral.join(", ");
+
+    }
+
+
+
+    let absentText="";
+
+    if(absentees.regular.length>0){
+
+        absentText += absentees.regular.join("  ");
+
+    }
+
+
+    if(absentees.lateral.length>0){
+
+        absentText += "\n\nLE's:- ";
+        absentText += absentees.lateral.join(", ");
+
+    }
+
+
+
+return `*Attendance Report*
+
 *Date:* ${dd}/${mm}/${yyyy}
+
 *Class:* ${cls}
+
 *Total Students:* ${currentStudents.length}
 
-*Presentees:* ${presentees.length}
-*Presentees Roll Numbers:*
-${presentees.join(", ")}
 
-*Absentees:* ${absentees.length}
-*Absentee Roll Numbers:*
-${absentees.join(", ")}`;
+*Presentees:* ${presentees.regular.length + presentees.lateral.length}
+
+${presentText}
+
+
+*Absentees:* ${absentees.regular.length + absentees.lateral.length}
+
+${absentText}`;
+
 }
 
 function copyReport(){
