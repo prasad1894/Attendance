@@ -756,12 +756,29 @@ function getAbsentees(){
 
 }
 
-function getAbsentees(){
+function sendWhatsApp(){
 
-    return [...absentSet]
-    .sort((a,b)=>a-b)
-    .map(i=>currentStudents[i].roll.slice(-2));
+    if(currentStudents.length === 0){
+        alert("Please select class and load students first");
+        return;
+    }
 
+    const report = generateReport();
+
+    if(!report){
+        alert("Report generation failed");
+        return;
+    }
+
+    const whatsappURL = 
+    "https://api.whatsapp.com/send?text=" + encodeURIComponent(report);
+
+    window.open(whatsappURL, "_blank");
+
+}
+
+function sendWhatsApp(){
+    alert(generateReport());
 }
 
 function getPresentees(){
