@@ -45,19 +45,30 @@ h2{
 
 select{
     width:100%;
-    padding:10px;
+    padding:14px;
     margin-bottom:15px;
     border:1px solid #ccc;
-    border-radius:8px;
-    font-size:16px;
+    border-radius:10px;
+    font-size:18px;
 }
 
 .stats{
     display:flex;
     justify-content:space-around;
     margin-bottom:15px;
+    gap:10px;
     font-weight:bold;
     font-size:18px;
+}
+
+.stats div{
+    flex:1;
+    background:#f5f5f5;
+    padding:15px;
+    text-align:center;
+    border-radius:10px;
+    font-size:20px;
+    font-weight:bold;
 }
 
 .grid{
@@ -130,23 +141,23 @@ textarea{
 <span>Date: <span id="date"></span></span>
 </div>
 
-<div style="display:flex; gap:10px; align-items:center;">
+<select id="classSelect">
+    <option value="">Select Class</option>
 
-    <select id="classSelect" style="flex:1;">
-        <option value="">Select Class</option>
+    <option>2nd Year CSM - A Sec</option>
+    <option>2nd Year CSM - B Sec</option>
+    <option>3rd Year CSM - A Sec</option>
+    <option>4th Year CSM - A Sec</option>
+    <option>4th Year CSM - B Sec</option>
+</select>
 
-        <option>2nd Year CSM - A Sec</option>
-        <option>2nd Year CSM - B Sec</option>
-        <option>3rd Year CSM - A Sec</option>
-        <option>4th Year CSM - A Sec</option>
-        <option>4th Year CSM - B Sec</option>
-    </select>
+<div style="display:flex; gap:10px;">
 
-    <button class="action copy-present" onclick="loadStudents()">
+    <button class="action copy-present" style="flex:1;" onclick="loadStudents()">
         Load Students
     </button>
 
-    <button class="action copy-report" onclick="showManageClasses()">
+    <button class="action copy-report" style="flex:1;" onclick="showManageClasses()">
         Manage Classes
     </button>
 
@@ -192,6 +203,10 @@ Copy Presentees
 
 <button class="action copy-absent" onclick="copyAbsentees()">
 Copy Absentees
+</button>
+
+<button class="action" style="background:#009688;" onclick="saveAttendance()">
+    💾 Save Attendance
 </button>
 
 <button class="action copy-report" onclick="sendWhatsApp()">
@@ -574,6 +589,7 @@ const students = {
 
 };
 
+const scriptURL = "https://script.google.com/macros/s/AKfycbzvIvlq-7gyag7Ip2IeBsWx7YemcGh5Gr5NV6CvzUQtUhO2_gnb1ATREcwpkZ-WW_e4CA/exec";
 
 let currentStudents=[];
 
@@ -717,6 +733,77 @@ function copyAbsentees(){
     alert("Absentees copied");
 }
 
+function saveAttendance(){
+
+    const cls = document.getElementById("classSelect").value;
+
+    if(currentStudents.length === 0){
+        alert("Please select class and load students first");
+        return;
+    }
+
+
+    let year = "";
+
+    if(cls.startsWith("2nd Year")){
+        year = "2nd Year";
+    }
+    else if(cls.startsWith("3rd Year")){
+        year = "3rd Year";
+    }
+    else if(cls.startsWith("4th Year")){
+        year = "4th Year";
+    }
+
+
+    let section = cls.replace(year + " CSM - ", "");
+
+
+    const data = {
+
+        date: `${dd}/${mm}/${yyyy}`,
+
+        year: year,
+
+        section: section,
+
+        total: currentStudents.length,
+
+        present: getPresentees().length,
+
+        absent: getAbsentees().length
+
+    };
+
+
+    fetch(scriptURL, {
+
+        method:"POST",
+
+        body:JSON.stringify(data)
+
+    })
+
+    .then(response=>response.text())
+
+    .then(result=>{
+
+        alert("✅ Attendance Saved Successfully");
+
+        console.log(result);
+
+    })
+
+    .catch(error=>{
+
+        alert("❌ Error saving attendance");
+
+        console.log(error);
+
+    });
+
+}
+
 function generateReport(){
 
     const cls=document.getElementById("classSelect").value;
@@ -759,11 +846,15 @@ function sendWhatsApp(){
 }
 
 function generatePreview(){
-    document.getElementById("preview").value=
-    generateReport();
-}
 
-generatePreview();
+    if(currentStudents.length === 0){
+        document.getElementById("preview").value =
+        "Please select a class and click 'Load Students'.";
+        return;
+    }
+
+    document.getElementById("preview").value = generateReport();
+}
 
 function showManageClasses(){
 
