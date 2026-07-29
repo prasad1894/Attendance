@@ -933,7 +933,7 @@ function generateReport(){
     let presentText="";
 
     if(presentees.regular.length>0){
-        presentText += presentees.regular.join("  ");
+        presentText += presentees.regular.join(", ");
     }
 
 
@@ -950,7 +950,7 @@ function generateReport(){
 
     if(absentees.regular.length>0){
 
-        absentText += absentees.regular.join("  ");
+        absentText += absentees.regular.join(", ");
 
     }
 
@@ -964,22 +964,16 @@ function generateReport(){
 
 
 
-return `*Attendance Report*
-
+return `*Attendance*
 *Date:* ${dd}/${mm}/${yyyy}
-
 *Class:* ${cls}
-
 *Total Students:* ${currentStudents.length}
 
-
 *Presentees:* ${presentees.regular.length + presentees.lateral.length}
-
 ${presentText}
 
 
 *Absentees:* ${absentees.regular.length + absentees.lateral.length}
-
 ${absentText}`;
 
 }
