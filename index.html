@@ -37,8 +37,8 @@ h2{
 
 .info{
     display:flex;
-    justify-content:space-between;
-    flex-wrap:wrap;
+    justify-content:center;
+    align-items:center;
     margin-bottom:10px;
     font-weight:bold;
 }
@@ -134,6 +134,44 @@ textarea{
     border-radius:8px;
     border:1px solid #ccc;
 }
+
+.top-buttons{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+}
+
+.top-buttons select{
+    width:100%;
+    margin-bottom:0;
+}
+
+.top-buttons button{
+    width:100%;
+}
+
+#attendanceMode{
+    width:100%;
+    padding:12px 14px;
+    margin:0;
+    border:2px solid #f44336;
+    border-radius:8px;
+    background:#ffebee;
+    color:#d32f2f;
+    font-size:15px;
+    font-weight:bold;
+    cursor:pointer;
+    outline:none;
+    transition:0.2s;
+}
+
+#attendanceMode:hover{
+    background:#f5f5f5;
+}
+
+#attendanceMode:focus{
+    box-shadow:0 0 0 2px #4caf50;
+}
 </style>
 </head>
 
@@ -158,7 +196,7 @@ textarea{
     <option>4th Year CSM - B Sec</option>
 </select>
 
-<div style="display:flex; gap:10px;">
+<div class="top-buttons">
 
     <button class="action copy-present" style="flex:1;" onclick="loadStudents()">
         Load Students
@@ -1235,6 +1273,36 @@ function importClasses(){
 
 document.getElementById("attendanceMode")
 .addEventListener("change", loadStudents);
+
+const attendanceMode = document.getElementById("attendanceMode");
+
+function updateModeColor(){
+
+    if(attendanceMode.value === "absent"){
+
+        attendanceMode.style.background = "#ffebee";
+        attendanceMode.style.color = "#d32f2f";
+        attendanceMode.style.borderColor = "#f44336";
+
+    }
+    else{
+
+        attendanceMode.style.background = "#e8f5e9";
+        attendanceMode.style.color = "#2e7d32";
+        attendanceMode.style.borderColor = "#4caf50";
+
+    }
+
+}
+
+attendanceMode.addEventListener("change", function(){
+
+    updateModeColor();
+    loadStudents();
+
+});
+
+updateModeColor();
 
 </script>
 
