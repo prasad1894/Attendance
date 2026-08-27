@@ -81,15 +81,22 @@ select{
     border:none;
     border-radius:8px;
     padding:12px 0;
-    background:#2196f3;
-    color:white;
+    background:white;
+    color:black;
     font-weight:bold;
     cursor:pointer;
     transition:.2s;
+    border:1px solid #ccc;
+}
+
+.roll.present{
+    background:#4caf50;
+    color:white;
 }
 
 .roll.absent{
     background:#f44336;
+    color:white;
 }
 
 .buttons{
@@ -160,6 +167,11 @@ textarea{
     <button class="action copy-report" style="flex:1;" onclick="showManageClasses()">
         Manage Classes
     </button>
+
+    <select id="attendanceMode">
+        <option value="absent" selected>Mark Absentees</option>
+        <option value="present">Mark Presentees</option>
+    </select>
 
     <button class="action copy-report" onclick="copyReport()">
         Copy Report
@@ -637,11 +649,11 @@ return letters[Math.floor(n/10)] + (n%10);
 
 }
 
-
-
 function loadStudents(){
 
     let selected = document.getElementById("classSelect").value;
+
+    let mode = document.getElementById("attendanceMode").value;
 
     currentStudents = students[selected] || [];
 
@@ -649,64 +661,78 @@ function loadStudents(){
 
     absentSet.clear();
 
-
     currentStudents.forEach((student,index)=>{
 
         let btn = document.createElement("button");
 
-        btn.className="roll";
+        // Default button is always WHITE
+        btn.className = "roll";
 
-        // show last two digits of roll number
         let count = 0;
-let leCount = 0;
+        let leCount = 0;
 
-for(let j=0; j<=index; j++){
+        for(let j=0; j<=index; j++){
 
-    if(currentStudents[j].roll.includes("T5A")){
-        leCount++;
-    }
-    else{
-        count++;
-    }
-
-}
-
-if (student.roll === "238T1A4214") {
-
-    btn.textContent = student.roll;
-
-    btn.style.gridColumn = "span 3"; // wider button
-
-    btn.style.fontSize = "12px";
-
-}
-
-else if (student.roll.includes("T5A")) {
-    btn.textContent = "LE-" + student.roll.slice(-2);
-}
-else {
-
-    let roll = student.roll;
-
-    // Get last 2 characters of roll number
-    let lastTwo = roll.slice(-2);
-
-    btn.textContent = lastTwo;
-}
-
-
-        btn.onclick=()=>{
-
-            if(absentSet.has(index)){
-
-                absentSet.delete(index);
-                btn.classList.remove("absent");
-
+            if(currentStudents[j].roll.includes("T5A")){
+                leCount++;
             }
             else{
+                count++;
+            }
+        }
 
-                absentSet.add(index);
-                btn.classList.add("absent");
+        if(student.roll === "238T1A4214"){
+
+            btn.textContent = student.roll;
+            btn.style.gridColumn = "span 3";
+            btn.style.fontSize = "12px";
+
+        }
+        else if(student.roll.includes("T5A")){
+
+            btn.textContent = "LE-" + student.roll.slice(-2);
+
+        }
+        else{
+
+            btn.textContent = student.roll.slice(-2);
+
+        }
+
+        btn.onclick = ()=>{
+
+            if(mode === "absent"){
+
+                // White → Red → White
+                if(absentSet.has(index)){
+
+                    absentSet.delete(index);
+                    btn.classList.remove("absent");
+
+                }
+                else{
+
+                    absentSet.add(index);
+                    btn.classList.add("absent");
+
+                }
+
+            }
+            else if(mode === "present"){
+
+                // White → Green → White
+                if(absentSet.has(index)){
+
+                    absentSet.delete(index);
+                    btn.classList.remove("present");
+
+                }
+                else{
+
+                    absentSet.add(index);
+                    btn.classList.add("present");
+
+                }
 
             }
 
@@ -714,11 +740,9 @@ else {
 
         };
 
-
         grid.appendChild(btn);
 
     });
-
 
     updateCounts();
 
@@ -734,15 +758,30 @@ grid.innerHTML = "";
 
 function updateCounts(){
 
-    const absent = absentSet.size;
-    const present = currentStudents.length - absent;
-
     const cls = document.getElementById("classSelect").value;
+    const mode = document.getElementById("attendanceMode").value;
+
+    let present;
+    let absent;
+
+    if(mode === "absent"){
+
+        // Mark Absentees mode
+        absent = absentSet.size;
+        present = currentStudents.length - absent;
+
+    }
+    else{
+
+        // Mark Presentees mode
+        present = absentSet.size;
+        absent = currentStudents.length - present;
+
+    }
 
     const extraStudents = specialStudents[cls]
         ? specialStudents[cls].length
         : 0;
-
 
     document.getElementById("presentCount").textContent =
         present + extraStudents;
@@ -758,41 +797,49 @@ function getAbsentees(){
     let regular = [];
     let lateral = [];
 
-    [...absentSet]
-    .sort((a,b)=>a-b)
-    .forEach(i=>{
+    const mode = document.getElementById("attendanceMode").value;
 
-        let student = currentStudents[i];
+    currentStudents.forEach((student,index)=>{
 
-        if(student.roll.includes("T5A")){
+        let isAbsent;
 
-            lateral.push(student.roll.slice(-2));
-
+        if(mode === "absent"){
+            // In Mark Absentees mode:
+            // selected = absent
+            isAbsent = absentSet.has(index);
         }
         else{
+            // In Mark Presentees mode:
+            // NOT selected = absent
+            isAbsent = !absentSet.has(index);
+        }
 
-            let regNo = currentStudents
-            .slice(0,i+1)
-            .filter(s=>!s.roll.includes("T5A"))
-            .length;
+        if(isAbsent){
 
-            if(student.roll === "238T1A4214"){
-                regular.push(student.roll);
+            if(student.roll.includes("T5A")){
+
+                lateral.push(student.roll.slice(-2));
+
             }
             else{
-                regular.push(student.roll.slice(-2));
+
+                if(student.roll === "238T1A4214"){
+                    regular.push(student.roll);
+                }
+                else{
+                    regular.push(student.roll.slice(-2));
+                }
+
             }
 
         }
 
     });
 
-
     return {
-        regular:regular,
-        lateral:lateral
+        regular: regular,
+        lateral: lateral
     };
-
 }
 
 function sendWhatsApp(){
@@ -813,14 +860,27 @@ function sendWhatsApp(){
 
 function getPresentees(){
 
-    let regular=[];
-    let lateral=[];
+    let regular = [];
+    let lateral = [];
 
+    const mode = document.getElementById("attendanceMode").value;
 
     currentStudents.forEach((student,index)=>{
 
-        if(!absentSet.has(index)){
+        let isPresent;
 
+        if(mode === "absent"){
+            // In Mark Absentees mode:
+            // NOT selected = present
+            isPresent = !absentSet.has(index);
+        }
+        else{
+            // In Mark Presentees mode:
+            // selected = present
+            isPresent = absentSet.has(index);
+        }
+
+        if(isPresent){
 
             if(student.roll.includes("T5A")){
 
@@ -828,11 +888,6 @@ function getPresentees(){
 
             }
             else{
-
-                let regNo=currentStudents
-                .slice(0,index+1)
-                .filter(s=>!s.roll.includes("T5A"))
-                .length;
 
                 if(student.roll === "238T1A4214"){
                     regular.push(student.roll);
@@ -847,12 +902,10 @@ function getPresentees(){
 
     });
 
-
     return {
-        regular:regular,
-        lateral:lateral
+        regular: regular,
+        lateral: lateral
     };
-
 }
     
 function copyPresentees(){
@@ -1179,6 +1232,9 @@ function importClasses(){
     alert("Import option can be added using file upload");
 
 }
+
+document.getElementById("attendanceMode")
+.addEventListener("change", loadStudents);
 
 </script>
 
