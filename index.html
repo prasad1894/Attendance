@@ -143,13 +143,36 @@ h2{
 .roll{
     border:none;
     border-radius:8px;
-    padding:12px 0;
+    padding:8px 4px;
     background:white;
     color:black;
     font-weight:bold;
     cursor:pointer;
     transition:.2s;
     border:1px solid #ccc;
+
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    min-height:58px;
+}
+
+.student-name{
+    font-size:9px;
+    font-weight:normal;
+    line-height:13px;
+    text-align:center;
+    margin-bottom:3px;
+    opacity:0.8;
+}
+
+.student-roll{
+    font-size:15px;
+    font-weight:bold;
+    line-height:13px;
+    text-align:center;
+    margin-bottom:3px;    
 }
 
 /* ABSENT */
@@ -801,23 +824,23 @@ function loadStudents(){
             }
         }
 
+        let displayRoll;
+
         if(student.roll === "238T1A4214"){
-
-            btn.textContent = student.roll;
+            displayRoll = student.roll;
             btn.style.gridColumn = "span 3";
-            btn.style.fontSize = "12px";
-
         }
         else if(student.roll.includes("T5A")){
-
-            btn.textContent = "LE-" + student.roll.slice(-2);
-
+            displayRoll = "LE-" + student.roll.slice(-2);
         }
         else{
-
-            btn.textContent = student.roll.slice(-2);
-
+            displayRoll = student.roll.slice(-2);
         }
+
+        btn.innerHTML = `
+            <span class="student-name">${student.name}</span>
+            <span class="student-roll">${displayRoll}</span>
+        `;
 
         btn.onclick = ()=>{
 
