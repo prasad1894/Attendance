@@ -277,7 +277,10 @@ textarea{
 <h2>📋 Attendance</h2>
 
 <div class="info">
-<span>Date: <span id="date"></span></span>
+<span>Selected Date: <strong id="date"></strong></span>
+<label for="attendanceDate" style="display:block;margin-top:10px;font-weight:600;">Filter attendance date</label>
+<input id="attendanceDate" type="date" style="margin-top:6px;padding:9px;border:1px solid #bbb;border-radius:8px;font-size:16px;max-width:100%;">
+<p id="dateFilterNote" style="margin:7px 0 0;font-size:12px;color:#555;">Choose a date to view saved attendance, absent roll numbers, summaries and Excel export.</p>
 </div>
 
 <select id="classSelect">
@@ -299,6 +302,11 @@ textarea{
     <button class="action copy-report" style="flex:1;" onclick="showManageClasses()">
         Manage Classes
     </button>
+
+    <button class="action" style="flex:1;background:#6a1b9a;" onclick="openStudentImport()">
+        📥 Import Students (CSV)
+    </button>
+    <input id="studentImportFile" type="file" accept=".csv,.txt,text/csv,text/plain" style="display:none" onchange="importStudentsCSV(event)">
 
     <select id="attendanceMode">
         <option value="absent" selected>Mark Absentees</option>
@@ -366,11 +374,11 @@ Send in WhatsApp
 </button>
 
 <button class="action" style="background:#1565c0;" onclick="exportAttendanceExcel()">
-📊 Export All Attendance to Excel
+📊 Export Selected Date to Excel
 </button>
 
 <button class="action" style="background:#455a64;" onclick="downloadAttendanceScreenshot()">
-📷 Download Attendance Summary
+📷 Download Selected Date Summary
 </button>
 </div>
 
@@ -529,8 +537,7 @@ const students = {
         { roll: "268T5A4209", name: "AARIF" },
         { roll: "268T5A4210", name: "KIRANMAYAI" },
         { roll: "268T5A4211", name: "TEJASRI" },
-        { roll: "268T5A4212", name: "CHARAN MANNE" },
-        { roll: "268T5A4213", name: "SHAIK HOUSUF RAHMAN" }
+        { roll: "268T5A4212", name: "CHARAN MANNE" }        
 // add upto 66 students
 ],
 
@@ -766,9 +773,116 @@ const students = {
 
 const specialStudents = {};
 
+// Restore imported/edited class rosters saved in this browser.
+function saveStudentRosters(){
+    try { localStorage.setItem("csmStudentRosters", JSON.stringify(students)); }
+    catch(e) { alert("Could not save the student list in this browser. Please export a classes backup."); }
+}
+try {
+    const savedRosters = JSON.parse(localStorage.getItem("csmStudentRosters") || "null");
+    if(savedRosters && typeof savedRosters === "object"){
+        Object.keys(savedRosters).forEach(cls => {
+            if(Array.isArray(savedRosters[cls])) students[cls] = savedRosters[cls];
+        });
+    }
+} catch(e) { console.warn("Could not load saved student rosters", e); }
+
+function parseCSVRows(text){
+    const rows=[]; let row=[]; let field=""; let quoted=false;
+    text=text.replace(/^\uFEFF/, "");
+    for(let i=0;i<text.length;i++){
+        const ch=text[i];
+        if(ch==='"'){
+            if(quoted && text[i+1]==='"'){ field+='"'; i++; }
+            else quoted=!quoted;
+        } else if(ch===',' && !quoted){ row.push(field.trim()); field=""; }
+        else if((ch==='\n' || ch==='\r') && !quoted){
+            if(ch==='\r' && text[i+1]==='\n') i++;
+            row.push(field.trim()); field="";
+            if(row.some(v=>v!=="")) rows.push(row);
+            row=[];
+        } else field+=ch;
+    }
+    row.push(field.trim());
+    if(row.some(v=>v!=="")) rows.push(row);
+    return rows;
+}
+
+let studentImportAuthorized = false;
+
+function openStudentImport(){
+    const entered=prompt("Enter admin password to import students:");
+    if(entered !== ADMIN_PASSWORD){
+        studentImportAuthorized=false;
+        alert("Incorrect password. Student import is locked.");
+        return;
+    }
+    studentImportAuthorized=true;
+    document.getElementById("studentImportFile").click();
+}
+
+function importStudentsCSV(event){
+    if(!studentImportAuthorized){
+        event.target.value="";
+        alert("Student import is locked. Enter the admin password first.");
+        return;
+    }
+    studentImportAuthorized=false;
+    const file=event.target.files && event.target.files[0];
+    if(!file) return;
+    const className=document.getElementById("classSelect").value;
+    if(!className){
+        alert("Please select the class first, then import the student CSV file.");
+        event.target.value=""; return;
+    }
+    const reader=new FileReader();
+    reader.onload=function(){
+        try{
+            const rows=parseCSVRows(String(reader.result || ""));
+            if(!rows.length) throw new Error("The file is empty.");
+            const norm=v=>String(v||"").trim().toLowerCase().replace(/[ _-]/g,"");
+            const first=rows[0].map(norm);
+            let rollIndex=first.findIndex(v=>["roll","rollno","rollnumber","studentid","id","admissionno","admissionnumber"].includes(v));
+            let nameIndex=first.findIndex(v=>["name","studentname","fullname","student"].includes(v));
+            let start=0;
+            if(rollIndex>=0 || nameIndex>=0){
+                if(rollIndex<0 || nameIndex<0) throw new Error("Please include both Roll No and Name columns in the CSV header.");
+                start=1;
+            } else {
+                // Headerless CSV format: first column = roll number, second = student name.
+                rollIndex=0; nameIndex=1;
+            }
+            const incoming=[];
+            for(let i=start;i<rows.length;i++){
+                const roll=String(rows[i][rollIndex]||"").trim().replace(/^['’]/,"");
+                const name=String(rows[i][nameIndex]||"").trim();
+                if(!roll || !name) continue;
+                if(norm(roll)==="rollno" || norm(name)==="name") continue;
+                incoming.push({roll:roll, name:name});
+            }
+            if(!incoming.length) throw new Error("No valid students found. Check that each row has a roll number and name.");
+            if(!Array.isArray(students[className])) students[className]=[];
+            const existing=new Set(students[className].map(s=>String(s.roll||"").trim().toLowerCase()));
+            let added=0, skipped=0;
+            incoming.forEach(student=>{
+                const key=student.roll.toLowerCase();
+                if(existing.has(key)){ skipped++; return; }
+                students[className].push(student); existing.add(key); added++;
+            });
+            saveStudentRosters();
+            loadStudents();
+            if(document.getElementById("manageBox").style.display!=="none") displayClasses();
+            alert(`Import complete for ${className}.\nAdded: ${added}\nSkipped duplicate roll numbers: ${skipped}\n\nThe student list is saved in this browser.`);
+        } catch(err){ alert("Could not import students: " + err.message); }
+        event.target.value="";
+    };
+    reader.onerror=function(){ alert("Could not read this file. Please try saving it as CSV UTF-8 and importing again."); event.target.value=""; };
+    reader.readAsText(file);
+}
+
     
 //const scriptURL = "https://script.google.com/macros/s/AKfycbzvIvlq-7gyag7Ip2IeBsWx7YemcGh5Gr5NV6CvzUQtUhO2_gnb1ATREcwpkZ-WW_e4CA/exec";
-const scriptURL = "https://script.google.com/macros/s/AKfycbzAwL7DhSfLvodXUS0oPf05Ri2a3B9pa5BYV0x2XIMdHx_5vuQPluMTyoIM7wCye-k8dw/exec";
+const scriptURL = "https://script.google.com/macros/s/AKfycbxo1Ae1WUnA_fKaNEUPTIDn7uhLonGAw73gq24MLLzXXtwin627Zrtqo6CE5TVfoD9U_Q/exec";
 
     
 let currentStudents=[];
@@ -782,8 +896,62 @@ const dd = String(today.getDate()).padStart(2,'0');
 const mm = String(today.getMonth()+1).padStart(2,'0');
 const yyyy = today.getFullYear();
 
-document.getElementById("date").textContent =
-`${dd}/${mm}/${yyyy}`;
+function localISODate(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
+
+function getSelectedDateString() {
+    const value = document.getElementById("attendanceDate").value || localISODate();
+    const [y, m, d] = value.split("-");
+    return `${d}/${m}/${y}`;
+}
+
+function isSelectedToday() {
+    return (document.getElementById("attendanceDate").value || localISODate()) === localISODate();
+}
+
+function getRecordsForSelectedDate() {
+    const selectedDate = getSelectedDateString();
+    return getAttendanceHistory().filter(record => record.date === selectedDate);
+}
+
+function getSelectedClassRecord() {
+    const cls = document.getElementById("classSelect").value;
+    return getRecordsForSelectedDate().find(record => record.className === cls) || null;
+}
+
+const attendanceDateInput = document.getElementById("attendanceDate");
+attendanceDateInput.value = localISODate();
+document.getElementById("date").textContent = getSelectedDateString();
+
+function handleDateFilterChange() {
+    document.getElementById("date").textContent = getSelectedDateString();
+    const note = document.getElementById("dateFilterNote");
+    if (isSelectedToday()) {
+        note.textContent = "Today selected. Mark attendance as usual; Excel and reports use today's saved records.";
+    } else {
+        note.textContent = "Previous date selected. View/export saved records only; marking/saving is disabled to prevent overwriting old attendance.";
+    }
+    const records = getRecordsForSelectedDate();
+    const cls = document.getElementById("classSelect").value;
+    const record = records.find(r => r.className === cls);
+    if (!isSelectedToday() && cls) {
+        if (record) {
+            document.getElementById("presentCount").textContent = record.present;
+            document.getElementById("absentCount").textContent = record.absent;
+            document.getElementById("preview").value = generateReport();
+        } else {
+            document.getElementById("preview").value = `No saved attendance found for ${getSelectedDateString()}${cls ? " - " + cls : ""}.`;
+        }
+    } else if (currentStudents.length) {
+        updateCounts();
+    }
+}
+
+attendanceDateInput.addEventListener("change", handleDateFilterChange);
 
 function displayNumber(index){
 
@@ -997,9 +1165,14 @@ function getAbsentees(){
 }
 
 function sendWhatsApp(){
+    if (!requireDataActionPassword("send the attendance summary to WhatsApp")) return;
 
-    if(currentStudents.length===0){
-        alert("Please select class and load students first");
+    if(!isSelectedToday() && getRecordsForSelectedDate().length===0){
+        alert(`No saved attendance found for ${getSelectedDateString()}.`);
+        return;
+    }
+    if(isSelectedToday() && currentStudents.length===0 && getRecordsForSelectedDate().length===0){
+        alert("Please load a class or save attendance first.");
         return;
     }
 
@@ -1063,82 +1236,45 @@ function getPresentees(){
 }
     
 async function copyPresentees(){
-
-    const p = getPresentees();
-
-    let text = p.regular.join(", ");
-
-    if(p.lateral.length){
-        text += "\nLE's:- " + p.lateral.join(", ");
+    let text = "";
+    if (!isSelectedToday()) {
+        const record = getSelectedClassRecord();
+        if (!record) { alert(`No saved attendance found for ${getSelectedDateString()} and the selected class.`); return; }
+        text = record.presenteeRolls || "";
+    } else {
+        const p = getPresentees();
+        text = p.regular.join(", ");
+        if (p.lateral.length) text += (text ? "\n" : "") + "LE's:- " + p.lateral.join(", ");
     }
-
-    if(!text.trim()){
-        alert("No presentees found.");
-        return;
-    }
-
-    try{
-
-        await navigator.clipboard.writeText(text);
-
-        alert(
-            "Presentees copied successfully!\n\n" +
-            text
-        );
-
-    }
-    catch(error){
-
-        console.error(error);
-
-        alert(
-            "Unable to copy presentees.\n\n" +
-            "Please copy the roll numbers manually."
-        );
-
-    }
+    if (!text.trim()) { alert("No presentees found."); return; }
+    text = `Date: ${getSelectedDateString()}\n${text}`;
+    try { await navigator.clipboard.writeText(text); alert("Presentees copied successfully!\n\n" + text); }
+    catch(error) { console.error(error); alert("Unable to copy presentees. Please copy the roll numbers manually.\n\n" + text); }
 }
 
-
 async function copyAbsentees(){
-
-    const a = getAbsentees();
-
-    let text = a.regular.join(", ");
-
-    if(a.lateral.length){
-        text += "\nLE's:- " + a.lateral.join(", ");
+    let text = "";
+    if (!isSelectedToday()) {
+        const record = getSelectedClassRecord();
+        if (!record) { alert(`No saved attendance found for ${getSelectedDateString()} and the selected class.`); return; }
+        text = record.absenteeRolls || "";
+    } else {
+        const a = getAbsentees();
+        text = a.regular.join(", ");
+        if (a.lateral.length) text += (text ? "\n" : "") + "LE's:- " + a.lateral.join(", ");
     }
-
-    if(!text.trim()){
-        alert("No absentees found.");
-        return;
-    }
-
-    try{
-
-        await navigator.clipboard.writeText(text);
-
-        alert(
-            "Absentees copied successfully!\n\n" +
-            text
-        );
-
-    }
-    catch(error){
-
-        console.error(error);
-
-        alert(
-            "Unable to copy absentees.\n\n" +
-            "Please copy the roll numbers manually."
-        );
-
-    }
-
+    if (!text.trim()) { alert("No absentees found for the selected date."); return; }
+    text = `Date: ${getSelectedDateString()}\n${text}`;
+    try { await navigator.clipboard.writeText(text); alert("Absentees copied successfully!\n\n" + text); }
+    catch(error) { console.error(error); alert("Unable to copy absentees. Please copy the roll numbers manually.\n\n" + text); }
 }
 
 function saveAttendance(){
+    if (!requireDataActionPassword("save attendance")) return;
+    if (!isSelectedToday()) {
+        alert("A previous date is selected. This view is read-only so saved attendance cannot be overwritten accidentally. Select today's date to mark and save attendance.");
+        return;
+    }
     const cls = document.getElementById("classSelect").value;
     if(currentStudents.length === 0 || !cls){
         alert("Please select a class and click Load Students first.");
@@ -1153,7 +1289,7 @@ function saveAttendance(){
     const p = getPresentees();
     const a = getAbsentees();
     const record = {
-        date: `${dd}/${mm}/${yyyy}`,
+        date: getSelectedDateString(),
         year, section, className: cls,
         total: currentStudents.length,
         present: p.regular.length + p.lateral.length,
@@ -1174,62 +1310,24 @@ function saveAttendance(){
     localStorage.setItem("csmAttendanceHistory", JSON.stringify(history));
 
     // Also send the summary to the existing Google Apps Script endpoint.
-    
-    // Send attendance to the central Google Spreadsheet.
     const googlePayload = {
-        date: record.date,
-        year: record.year,
-        section: record.section,
-        className: record.className,
-        total: record.total,
-        present: record.present,
-        absent: record.absent
+        date: record.date, year: record.year, section: record.section,
+        total: record.total, present: record.present, absent: record.absent
     };
-
     fetch(scriptURL, {
         method: "POST",
         body: JSON.stringify(googlePayload)
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error("HTTP error: " + response.status);
-        }
-        return response.text();
-    })
+    .then(response => response.text())
     .then(result => {
-        console.log("Google Sheets response:", result);
-
-        let data;
-
-        try {
-            data = JSON.parse(result);
-        } catch (e) {
-            throw new Error("Invalid response from Google Apps Script.");
-        }
-
-        if (data.success !== true) {
-            alert(
-                "Attendance saved on this device, but Google Sheets failed:\n\n" +
-                (data.message || "Unknown error")
-            );
-            return;
-        }
-
-        alert(
-            "Attendance saved on this device and Google Sheets!"
-        );
+        alert("✅ Attendance saved to this device. Google Sheet request sent too.\n\nUse Export All Attendance to Excel to download the history.");
+        console.log(result);
     })
     .catch(error => {
-        console.error("Google Sheets error:", error);
-
-        alert(
-            "Attendance saved on this device.\n\n" +
-            "Google Sheets save could not be confirmed.\n\n" +
-            "Check your Apps Script URL, deployment and connection."
-        );
+        alert("✅ Attendance saved on this device.\n\n⚠️ Google Sheet save could not be confirmed. Check your Apps Script URL/deployment, then export Excel as a backup.");
+        console.error(error);
     });
 }
-
 
 function getAttendanceHistory(){
     try { return JSON.parse(localStorage.getItem("csmAttendanceHistory") || "[]"); }
@@ -1237,9 +1335,10 @@ function getAttendanceHistory(){
 }
 
 function exportAttendanceExcel(){
-    const history = getAttendanceHistory();
+    if (!requireDataActionPassword("export attendance to Excel")) return;
+    const history = getRecordsForSelectedDate();
     if(!history.length){
-        alert("No saved attendance yet. Mark attendance and click Save Attendance first.");
+        alert(`No saved attendance found for ${getSelectedDateString()}. Choose another date or save attendance first.`);
         return;
     }
     if(typeof XLSX === "undefined"){
@@ -1260,194 +1359,92 @@ function exportAttendanceExcel(){
         {wch:10},{wch:10},{wch:45},{wch:45}
     ];
     XLSX.utils.book_append_sheet(wb, ws, "Attendance History");
-    XLSX.writeFile(wb, "CSM_Attendance_History.xlsx");
+    XLSX.writeFile(wb, `CSM_Attendance_${getSelectedDateString().replaceAll("/", "-")}.xlsx`);
 }
 
-
-function downloadAttendanceScreenshot() {
-    const history = getAttendanceHistory();
-    const todayDate = `${dd}/${mm}/${yyyy}`;
-
-    const classes = [
-        "2nd Year CSM - A Sec",
-        "2nd Year CSM - B Sec",
-        "3rd Year CSM - A Sec",
-        "4th Year CSM - A Sec",
-        "4th Year CSM - B Sec"
-    ];
-
-    // Get the saved record for each class for today's date.
-    const records = classes.map(cls =>
-        history.find(r =>
-            r.date === todayDate &&
-            r.className === cls
-        )
-    );
-
-    const missing = classes.filter((cls, i) => !records[i]);
-
-    if (missing.length > 0) {
-        alert(
-            "Attendance has not been saved today for:\n\n" +
-            missing.join("\n") +
-            "\n\nSave attendance for all five classes first."
-        );
+function downloadAttendanceScreenshot(){
+    if (!requireDataActionPassword("download the attendance summary")) return;
+    const records = getRecordsForSelectedDate();
+    if (!records.length) {
+        alert(`No saved attendance found for ${getSelectedDateString()}. Save attendance for the required classes first.`);
         return;
     }
-
-    const totalStudents = records.reduce(
-        (sum, r) => sum + Number(r.total || 0), 0
-    );
-
-    const totalAbsent = records.reduce(
-        (sum, r) => sum + Number(r.absent || 0), 0
-    );
-
+    const totalStudents = records.reduce((sum, r) => sum + Number(r.total || 0), 0);
+    const totalPresent = records.reduce((sum, r) => sum + Number(r.present || 0), 0);
+    const totalAbsent = records.reduce((sum, r) => sum + Number(r.absent || 0), 0);
+    const reportLines = [
+        "CSM BRANCH ATTENDANCE SUMMARY",
+        `Date: ${getSelectedDateString()}`,
+        `Classes with saved attendance: ${records.length}`,
+        "",
+        ...records.flatMap(r => [
+            r.className,
+            `Total: ${r.total} | Present: ${r.present} | Absent: ${r.absent}`,
+            `Absent Roll Numbers: ${r.absenteeRolls || "None"}`,
+            ""
+        ]),
+        "GRAND TOTALS",
+        `Total Students: ${totalStudents}`,
+        `Present: ${totalPresent}`,
+        `Absent: ${totalAbsent}`
+    ];
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-
-    canvas.width = 1100;
-    canvas.height = 650;
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Title
-    ctx.fillStyle = "#17365d";
-    ctx.fillRect(0, 0, canvas.width, 115);
-
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.font = "bold 38px Arial";
-    ctx.fillText("CSM BRANCH ATTENDANCE", 550, 48);
-
-    ctx.font = "25px Arial";
-    ctx.fillText(todayDate, 550, 85);
-
-    // Table headings
-    const x = [55, 570, 790, 1045];
-    let y = 165;
-    const rowHeight = 65;
-
-    function cell(text, x1, y1, width, height, header) {
-        ctx.fillStyle = header ? "#d9eaf7" : "#ffffff";
-        ctx.fillRect(x1, y1, width, height);
-
-        ctx.strokeStyle = "#555555";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x1, y1, width, height);
-
-        ctx.fillStyle = "#111111";
-        ctx.font = header ? "bold 22px Arial" : "22px Arial";
-        ctx.textAlign = header ? "center" : "left";
-
-        ctx.fillText(
-            String(text),
-            header ? x1 + width / 2 : x1 + 12,
-            y1 + 40
-        );
-    }
-
-    cell("Class", x[0], y, x[1] - x[0], rowHeight, true);
-    cell("Total", x[1], y, x[2] - x[1], rowHeight, true);
-    cell("Absentees", x[2], y, x[3] - x[2], rowHeight, true);
-
-    y += rowHeight;
-
-    records.forEach((r, i) => {
-        cell(classes[i].replace(" Year", ""), x[0], y,
-             x[1] - x[0], rowHeight, false);
-
-        cell(r.total, x[1], y, x[2] - x[1], rowHeight, false);
-        cell(r.absent, x[2], y, x[3] - x[2], rowHeight, false);
-
-        y += rowHeight;
+    const width = 1200, padding = 55, lineHeight = 34;
+    canvas.width = width;
+    canvas.height = padding * 2 + reportLines.length * lineHeight + 40;
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#12345a"; ctx.fillRect(0, 0, width, 100);
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 32px Arial"; ctx.fillText(reportLines[0], padding, 62);
+    let y = 145;
+    reportLines.slice(1).forEach(line => {
+        const isHeading = line === "GRAND TOTALS" || records.some(r => r.className === line);
+        ctx.fillStyle = isHeading ? "#12345a" : "#222222";
+        ctx.font = isHeading ? "bold 23px Arial" : "20px Arial";
+        const maxWidth = width - padding * 2;
+        let current = "";
+        for (const word of line.split(" ")) {
+            const test = current ? current + " " + word : word;
+            if (ctx.measureText(test).width > maxWidth && current) { ctx.fillText(current, padding, y); y += lineHeight; current = word; }
+            else current = test;
+        }
+        if (current) { ctx.fillText(current, padding, y); y += lineHeight; }
     });
-
-    // Grand total row
-    cell("GRAND TOTAL", x[0], y, x[1] - x[0], rowHeight, true);
-    cell(totalStudents, x[1], y, x[2] - x[1], rowHeight, true);
-    cell(totalAbsent, x[2], y, x[3] - x[2], rowHeight, true);
-
     const link = document.createElement("a");
-    link.download = `CSM_Attendance_All_Classes_${todayDate.replaceAll("/", "-")}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    link.download = `CSM_Attendance_Summary_${getSelectedDateString().replaceAll("/", "-")}.png`;
+    link.href = canvas.toDataURL("image/png"); link.click();
 }
-
-
 
 function generateReport(){
-
-    const cls = document.getElementById("classSelect").value;
-
-    const presentees = getPresentees();
-    const absentees = getAbsentees();
-
-    let presentText = "";
-
-    if(presentees.regular.length > 0){
-        presentText += presentees.regular.join(", ");
-    }
-
-    if(presentees.lateral.length > 0){
-
-        if(presentText !== ""){
-            presentText += "\n";
+    const date = getSelectedDateString();
+    const records = getRecordsForSelectedDate().slice();
+    if (isSelectedToday()) {
+        const cls = document.getElementById("classSelect").value;
+        if (cls && currentStudents.length && !records.some(r => r.className === cls)) {
+            const p = getPresentees(), a = getAbsentees();
+            records.push({
+                className: cls, total: currentStudents.length,
+                present: p.regular.length + p.lateral.length,
+                absent: a.regular.length + a.lateral.length,
+                presenteeRolls: [...p.regular, ...p.lateral].join(", "),
+                absenteeRolls: [...a.regular, ...a.lateral].join(", ")
+            });
         }
-
-        presentText += "LE's:- ";
-        presentText += presentees.lateral.join(", ");
-
     }
-
-
-    // Add detained student full roll number
-    let detainedText = "";
-
-    if(specialStudents[cls]){
-
-    presentText += "Other Student:-";
-
-    specialStudents[cls].forEach(s => {
-        presentText += s.roll + " - " + s.name + "\n";
+    if (!records.length) return `Attendance Summary\nDate: ${date}\nNo saved attendance found for this date.`;
+    const totalStudents = records.reduce((sum, r) => sum + Number(r.total || 0), 0);
+    const totalPresent = records.reduce((sum, r) => sum + Number(r.present || 0), 0);
+    const totalAbsent = records.reduce((sum, r) => sum + Number(r.absent || 0), 0);
+    let report = `*CSM BRANCH ATTENDANCE SUMMARY*\n*Date:* ${date}\n*Classes with records:* ${records.length}\n`;
+    records.forEach(r => {
+        report += `\n*${r.className}*\nTotal Students: ${r.total}\nPresent: ${r.present}\nAbsent: ${r.absent}\nAbsent Roll Numbers: ${r.absenteeRolls || "None"}\n`;
     });
-
-}
-
-
-    let absentText = "";
-
-    if(absentees.regular.length > 0){
-
-        absentText += absentees.regular.join(", ");
-
-    }
-
-    if(absentees.lateral.length > 0){
-
-        if(absentText !== ""){
-            absentText += "\n";
-        }
-
-        absentText += "LE's:- ";
-        absentText += absentees.lateral.join(", ");
-
-    }
-
-
-return `*Attendance*
-*Date:* ${dd}/${mm}/${yyyy}
-*Class:* ${cls}
-*Total Students:* ${currentStudents.length + (specialStudents[cls] ? specialStudents[cls].length : 0)}
-*Presentees:* ${presentees.regular.length + presentees.lateral.length}
-
-*Absentees:* ${absentees.regular.length + absentees.lateral.length}
-${absentText}`;
-
+    report += `\n*GRAND TOTALS*\nTotal Students: ${totalStudents}\nPresent: ${totalPresent}\nAbsent: ${totalAbsent}`;
+    return report;
 }
 
 function copyReport(){
+    if (!requireDataActionPassword("view/copy the attendance summary")) return;
 
     const report=generateReport();
 
@@ -1468,18 +1465,49 @@ function generatePreview(){
     document.getElementById("preview").value = generateReport();
 }
 
+// BASIC ADMIN PASSWORD PROTECTION for Manage Classes.
+// Change this password before using the page: set ADMIN_PASSWORD below.
+const ADMIN_PASSWORD = "Prasad@22";
+// Separate password for saving attendance, Excel exports, and attendance summaries.
+// Change this value to your own password before sharing the HTML file.
+const DATA_ACTION_PASSWORD = "12";
+
+function requireDataActionPassword(actionName){
+    const entered = prompt(`Enter the data-action password to ${actionName}:`);
+    if (entered !== DATA_ACTION_PASSWORD){
+        alert("Incorrect password. This action is locked.");
+        return false;
+    }
+    return true;
+}
+
+let adminSessionUnlocked = false;
+
+function requireClassAdmin(){
+    if(!adminSessionUnlocked){
+        alert("Manage Classes is locked. Open Manage Classes and enter the admin password first.");
+        return false;
+    }
+    return true;
+}
+
 function showManageClasses(){
+    const box=document.getElementById("manageBox");
 
-    let box=document.getElementById("manageBox");
-
-    if(box.style.display==="none"){
+    if(box.style.display==="none" || box.style.display===""){
+        const entered=prompt("Enter admin password to manage classes:");
+        if(entered !== ADMIN_PASSWORD){
+            adminSessionUnlocked=false;
+            alert("Incorrect password. Manage Classes remains locked.");
+            return;
+        }
+        adminSessionUnlocked=true;
         box.style.display="block";
         displayClasses();
-    }
-    else{
+    } else {
         box.style.display="none";
+        adminSessionUnlocked=false;
     }
-
 }
 
 
@@ -1528,13 +1556,20 @@ function displayClasses(){
 
 
 function addClass(){
+    if(!requireClassAdmin()) return;
+
 
     let name=prompt("Enter Class Name:");
 
     if(name){
 
-        students[name]=[];
-
+        students[name]=students[name] || [];
+        const selector=document.getElementById("classSelect");
+        if(!Array.from(selector.options).some(option=>option.value===name)){
+            const option=document.createElement("option"); option.value=name; option.textContent=name; selector.appendChild(option);
+        }
+        selector.value=name;
+        saveStudentRosters();
         displayClasses();
 
     }
@@ -1544,6 +1579,8 @@ function addClass(){
 
 
 function deleteClass(cls){
+    if(!requireClassAdmin()) return;
+
 
     if(confirm("Delete "+cls+" ?")){
 
@@ -1558,6 +1595,8 @@ function deleteClass(cls){
 
 
 function editClass(cls){
+    if(!requireClassAdmin()) return;
+
 
     alert("Edit students for "+cls);
 
@@ -1566,7 +1605,10 @@ function editClass(cls){
 
 
 function exportClasses(){
+    if(!requireClassAdmin()) return;
 
+
+    saveStudentRosters();
     let data=JSON.stringify(students);
 
     let blob=new Blob([data],{type:"application/json"});
@@ -1584,6 +1626,8 @@ function exportClasses(){
 
 
 function importClasses(){
+    if(!requireClassAdmin()) return;
+
 
     alert("Import option can be added using file upload");
 
