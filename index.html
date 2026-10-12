@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CSM Attendance</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
 *{
@@ -363,9 +364,18 @@ Copy Report
 <button class="action copy-report" onclick="sendWhatsApp()">
 Send in WhatsApp
 </button>
+
+<button class="action" style="background:#1565c0;" onclick="exportAttendanceExcel()">
+📊 Export All Attendance to Excel
+</button>
+
+<button class="action" style="background:#455a64;" onclick="downloadAttendanceScreenshot()">
+📷 Download Attendance Summary
+</button>
 </div>
 
 <textarea id="preview" readonly></textarea>
+<p style="margin-top:10px;font-size:13px;color:#555;">Saved history is stored in this browser. Export the Excel file regularly as a backup. The Google Sheet save depends on your Apps Script deployment.</p>
 
 </div>
 </div>
@@ -757,7 +767,7 @@ const specialStudents = {};
 
     
 //const scriptURL = "https://script.google.com/macros/s/AKfycbzvIvlq-7gyag7Ip2IeBsWx7YemcGh5Gr5NV6CvzUQtUhO2_gnb1ATREcwpkZ-WW_e4CA/exec";
-const scriptURL = "https://script.google.com/macros/s/AKfycbxo1Ae1WUnA_fKaNEUPTIDn7uhLonGAw73gq24MLLzXXtwin627Zrtqo6CE5TVfoD9U_Q/exec";
+const scriptURL = "https://script.google.com/macros/s/AKfycbzAwL7DhSfLvodXUS0oPf05Ri2a3B9pa5BYV0x2XIMdHx_5vuQPluMTyoIM7wCye-k8dw/exec";
 
     
 let currentStudents=[];
@@ -1128,85 +1138,243 @@ async function copyAbsentees(){
 }
 
 function saveAttendance(){
-
     const cls = document.getElementById("classSelect").value;
-
-    if(currentStudents.length === 0){
-        alert("Please select class and load students first");
+    if(currentStudents.length === 0 || !cls){
+        alert("Please select a class and click Load Students first.");
         return;
     }
 
-
-    let year = "";
-
-    if(cls.startsWith("2nd Year")){
-        year = "2nd Year";
-    }
-    else if(cls.startsWith("3rd Year")){
-        year = "3rd Year";
-    }
-    else if(cls.startsWith("4th Year")){
-        year = "4th Year";
-    }
-
-
-let section = "";
-
-if(cls.includes("A Sec")){
-    section = "CSM-A";
-}
-else if(cls.includes("B Sec")){
-    section = "CSM-B";
-}
-
-
+    const year = cls.startsWith("2nd Year") ? "2nd Year" :
+                 cls.startsWith("3rd Year") ? "3rd Year" :
+                 cls.startsWith("4th Year") ? "4th Year" : "Other";
+    const section = cls.includes("A Sec") ? "CSM-A" :
+                    cls.includes("B Sec") ? "CSM-B" : cls;
     const p = getPresentees();
     const a = getAbsentees();
-
-    const data = {
-
+    const record = {
         date: `${dd}/${mm}/${yyyy}`,
-
-        year: year,
-
-        section: section,
-
+        year, section, className: cls,
         total: currentStudents.length,
-
         present: p.regular.length + p.lateral.length,
-
-        absent: a.regular.length + a.lateral.length
-
+        absent: a.regular.length + a.lateral.length,
+        presenteeRolls: [...p.regular, ...p.lateral].join(", "),
+        absenteeRolls: [...a.regular, ...a.lateral].join(", "),
+        savedAt: new Date().toISOString()
     };
 
+    // Save a local history copy on this browser/device.
+    // Saving the same class twice on the same date updates that day's record.
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem("csmAttendanceHistory") || "[]"); }
+    catch(e) { history = []; }
+    const existing = history.findIndex(r => r.date === record.date && r.className === record.className);
+    if(existing >= 0) history[existing] = record;
+    else history.push(record);
+    localStorage.setItem("csmAttendanceHistory", JSON.stringify(history));
+
+    // Also send the summary to the existing Google Apps Script endpoint.
+    
+    // Send attendance to the central Google Spreadsheet.
+    const googlePayload = {
+        date: record.date,
+        year: record.year,
+        section: record.section,
+        className: record.className,
+        total: record.total,
+        present: record.present,
+        absent: record.absent
+    };
 
     fetch(scriptURL, {
-
-        method:"POST",
-
-        body:JSON.stringify(data)
-
+        method: "POST",
+        body: JSON.stringify(googlePayload)
     })
-
-    .then(response=>response.text())
-
-    .then(result=>{
-
-        alert("✅ Attendance Saved Successfully");
-
-        console.log(result);
-
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("HTTP error: " + response.status);
+        }
+        return response.text();
     })
+    .then(result => {
+        console.log("Google Sheets response:", result);
 
-    .catch(error=>{
+        let data;
 
-        alert("❌ Error saving attendance");
+        try {
+            data = JSON.parse(result);
+        } catch (e) {
+            throw new Error("Invalid response from Google Apps Script.");
+        }
 
-        console.log(error);
+        if (data.success !== true) {
+            alert(
+                "Attendance saved on this device, but Google Sheets failed:\n\n" +
+                (data.message || "Unknown error")
+            );
+            return;
+        }
 
+        alert(
+            "Attendance saved on this device and Google Sheets!"
+        );
+    })
+    .catch(error => {
+        console.error("Google Sheets error:", error);
+
+        alert(
+            "Attendance saved on this device.\n\n" +
+            "Google Sheets save could not be confirmed.\n\n" +
+            "Check your Apps Script URL, deployment and connection."
+        );
+    });
+}
+
+
+function getAttendanceHistory(){
+    try { return JSON.parse(localStorage.getItem("csmAttendanceHistory") || "[]"); }
+    catch(e) { return []; }
+}
+
+function exportAttendanceExcel(){
+    const history = getAttendanceHistory();
+    if(!history.length){
+        alert("No saved attendance yet. Mark attendance and click Save Attendance first.");
+        return;
+    }
+    if(typeof XLSX === "undefined"){
+        alert("Excel library did not load. Check your internet connection and try again.");
+        return;
+    }
+    const rows = history.map(r => ({
+        Date: r.date, Year: r.year, Section: r.section,
+        Class: r.className, "Total Students": r.total,
+        Present: r.present, Absent: r.absent,
+        "Present Roll Numbers": r.presenteeRolls || "",
+        "Absent Roll Numbers": r.absenteeRolls || ""
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [
+        {wch:13},{wch:12},{wch:12},{wch:24},{wch:15},
+        {wch:10},{wch:10},{wch:45},{wch:45}
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance History");
+    XLSX.writeFile(wb, "CSM_Attendance_History.xlsx");
+}
+
+
+function downloadAttendanceScreenshot() {
+    const history = getAttendanceHistory();
+    const todayDate = `${dd}/${mm}/${yyyy}`;
+
+    const classes = [
+        "2nd Year CSM - A Sec",
+        "2nd Year CSM - B Sec",
+        "3rd Year CSM - A Sec",
+        "4th Year CSM - A Sec",
+        "4th Year CSM - B Sec"
+    ];
+
+    // Get the saved record for each class for today's date.
+    const records = classes.map(cls =>
+        history.find(r =>
+            r.date === todayDate &&
+            r.className === cls
+        )
+    );
+
+    const missing = classes.filter((cls, i) => !records[i]);
+
+    if (missing.length > 0) {
+        alert(
+            "Attendance has not been saved today for:\n\n" +
+            missing.join("\n") +
+            "\n\nSave attendance for all five classes first."
+        );
+        return;
+    }
+
+    const totalStudents = records.reduce(
+        (sum, r) => sum + Number(r.total || 0), 0
+    );
+
+    const totalAbsent = records.reduce(
+        (sum, r) => sum + Number(r.absent || 0), 0
+    );
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = 1100;
+    canvas.height = 650;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Title
+    ctx.fillStyle = "#17365d";
+    ctx.fillRect(0, 0, canvas.width, 115);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.font = "bold 38px Arial";
+    ctx.fillText("CSM BRANCH ATTENDANCE", 550, 48);
+
+    ctx.font = "25px Arial";
+    ctx.fillText(todayDate, 550, 85);
+
+    // Table headings
+    const x = [55, 570, 790, 1045];
+    let y = 165;
+    const rowHeight = 65;
+
+    function cell(text, x1, y1, width, height, header) {
+        ctx.fillStyle = header ? "#d9eaf7" : "#ffffff";
+        ctx.fillRect(x1, y1, width, height);
+
+        ctx.strokeStyle = "#555555";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x1, y1, width, height);
+
+        ctx.fillStyle = "#111111";
+        ctx.font = header ? "bold 22px Arial" : "22px Arial";
+        ctx.textAlign = header ? "center" : "left";
+
+        ctx.fillText(
+            String(text),
+            header ? x1 + width / 2 : x1 + 12,
+            y1 + 40
+        );
+    }
+
+    cell("Class", x[0], y, x[1] - x[0], rowHeight, true);
+    cell("Total", x[1], y, x[2] - x[1], rowHeight, true);
+    cell("Absentees", x[2], y, x[3] - x[2], rowHeight, true);
+
+    y += rowHeight;
+
+    records.forEach((r, i) => {
+        cell(classes[i].replace(" Year", ""), x[0], y,
+             x[1] - x[0], rowHeight, false);
+
+        cell(r.total, x[1], y, x[2] - x[1], rowHeight, false);
+        cell(r.absent, x[2], y, x[3] - x[2], rowHeight, false);
+
+        y += rowHeight;
     });
 
+    // Grand total row
+    cell("GRAND TOTAL", x[0], y, x[1] - x[0], rowHeight, true);
+    cell(totalStudents, x[1], y, x[2] - x[1], rowHeight, true);
+    cell(totalAbsent, x[2], y, x[3] - x[2], rowHeight, true);
+
+    const link = document.createElement("a");
+    link.download = `CSM_Attendance_All_Classes_${todayDate.replaceAll("/", "-")}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
 }
+
+
 
 function generateReport(){
 
