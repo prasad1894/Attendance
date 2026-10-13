@@ -280,7 +280,7 @@ textarea{
 <span>Selected Date: <strong id="date"></strong></span>
 <label for="attendanceDate" style="display:block;margin-top:10px;font-weight:600;">Filter attendance date</label>
 <input id="attendanceDate" type="date" style="margin-top:6px;padding:9px;border:1px solid #bbb;border-radius:8px;font-size:16px;max-width:100%;">
-<p id="dateFilterNote" style="margin:7px 0 0;font-size:12px;color:#555;">Choose a date to view saved attendance, absent roll numbers, summaries and Excel export.</p>
+<p id="dateFilterNote" style="margin:7px 0 0;font-size:12px;color:#555;">Changing the date requires the attendance data password. Future dates are not allowed.</p>
 </div>
 
 <select id="classSelect">
@@ -537,7 +537,8 @@ const students = {
         { roll: "268T5A4209", name: "AARIF" },
         { roll: "268T5A4210", name: "KIRANMAYAI" },
         { roll: "268T5A4211", name: "TEJASRI" },
-        { roll: "268T5A4212", name: "CHARAN MANNE" }        
+        { roll: "268T5A4212", name: "CHARAN MANNE" },
+        { roll: "268T5A4213", name: "Houseef" },        
 // add upto 66 students
 ],
 
@@ -925,9 +926,27 @@ function getSelectedClassRecord() {
 
 const attendanceDateInput = document.getElementById("attendanceDate");
 attendanceDateInput.value = localISODate();
+attendanceDateInput.max = localISODate();
+let lastAuthorizedAttendanceDate = attendanceDateInput.value;
 document.getElementById("date").textContent = getSelectedDateString();
 
 function handleDateFilterChange() {
+    const requestedDate = attendanceDateInput.value || localISODate();
+    const todayISO = localISODate();
+    if (requestedDate > todayISO) {
+        alert("Future attendance is not allowed. You can select today or a previous date.");
+        attendanceDateInput.value = lastAuthorizedAttendanceDate;
+        return;
+    }
+    if (requestedDate !== lastAuthorizedAttendanceDate) {
+        const entered = prompt("Enter the attendance data password to change the attendance date:");
+        if (entered !== DATA_ACTION_PASSWORD) {
+            alert("Incorrect password. The attendance date was not changed.");
+            attendanceDateInput.value = lastAuthorizedAttendanceDate;
+            return;
+        }
+        lastAuthorizedAttendanceDate = requestedDate;
+    }
     document.getElementById("date").textContent = getSelectedDateString();
     const note = document.getElementById("dateFilterNote");
     if (isSelectedToday()) {
@@ -949,9 +968,14 @@ function handleDateFilterChange() {
     } else if (currentStudents.length) {
         updateCounts();
     }
+    if (document.getElementById("classSelect").value) loadStudents();
 }
 
 attendanceDateInput.addEventListener("change", handleDateFilterChange);
+document.getElementById("classSelect").addEventListener("change", () => {
+    if (document.getElementById("classSelect").value) loadStudents();
+    else { currentStudents = []; absentSet.clear(); grid.innerHTML = ""; updateCounts(); }
+});
 
 function displayNumber(index){
 
@@ -971,6 +995,17 @@ return letters[Math.floor(n/10)] + (n%10);
 
 }
 
+function getRollsFromSavedRecord(record, status) {
+    const fullKey = status === "absent" ? "absenteeFullRolls" : "presenteeFullRolls";
+    if (Array.isArray(record[fullKey])) return record[fullKey];
+    // Compatibility with records saved by older versions, which stored only the final two digits.
+    const legacyText = status === "absent" ? (record.absenteeRolls || "") : (record.presenteeRolls || "");
+    const tokens = legacyText.split(/[\s,;\n]+/).map(v => v.trim()).filter(Boolean);
+    return currentStudents.filter(student => tokens.some(token =>
+        token === student.roll || token === student.roll.slice(-2) || token === ("LE-" + student.roll.slice(-2))
+    )).map(student => student.roll);
+}
+
 function loadStudents(){
 
     let selected = document.getElementById("classSelect").value;
@@ -980,15 +1015,27 @@ function loadStudents(){
     currentStudents = students[selected] || [];
 
     grid.innerHTML = "";
-
     absentSet.clear();
+
+    const savedRecord = getSelectedClassRecord();
+    const savedAbsentRolls = savedRecord ? getRollsFromSavedRecord(savedRecord, "absent") : [];
+    const savedPresentRolls = savedRecord ? getRollsFromSavedRecord(savedRecord, "present") : [];
+    const isToday = isSelectedToday();
 
     currentStudents.forEach((student,index)=>{
 
         let btn = document.createElement("button");
 
-        // Default button is always WHITE
+        // Restore the saved status so individual students can be corrected without re-marking the whole class.
         btn.className = "roll";
+        if (mode === "absent" && savedAbsentRolls.includes(student.roll)) {
+            absentSet.add(index);
+            btn.classList.add("absent");
+        } else if (mode === "present" && savedPresentRolls.includes(student.roll)) {
+            absentSet.add(index);
+            btn.classList.add("present");
+        }
+        if (!isToday) btn.title = "Previous-date attendance is read-only";
 
         let count = 0;
         let leCount = 0;
@@ -1022,8 +1069,13 @@ function loadStudents(){
         `;
 
         btn.onclick = ()=>{
+            if (!isSelectedToday()) {
+                alert("Previous-date attendance is read-only. Select today to mark attendance.");
+                return;
+            }
+            const currentMode = document.getElementById("attendanceMode").value;
 
-            if(mode === "absent"){
+            if(currentMode === "absent"){
 
                 // White → Red → White
                 if(absentSet.has(index)){
@@ -1040,7 +1092,7 @@ function loadStudents(){
                 }
 
             }
-            else if(mode === "present"){
+            else if(currentMode === "present"){
 
                 // White → Green → White
                 if(absentSet.has(index)){
@@ -1241,12 +1293,15 @@ async function copyPresentees(){
         const record = getSelectedClassRecord();
         if (!record) { alert(`No saved attendance found for ${getSelectedDateString()} and the selected class.`); return; }
         text = record.presenteeRolls || "";
-    } else {
+    } else if (currentStudents.length) {
         const p = getPresentees();
         text = p.regular.join(", ");
         if (p.lateral.length) text += (text ? "\n" : "") + "LE's:- " + p.lateral.join(", ");
+    } else {
+        const record = getSelectedClassRecord();
+        if (record) text = record.presenteeRolls || "";
     }
-    if (!text.trim()) { alert("No presentees found."); return; }
+    if (!text.trim()) { alert("No presentees found for the selected date/class. Load the class or save attendance first."); return; }
     text = `Date: ${getSelectedDateString()}\n${text}`;
     try { await navigator.clipboard.writeText(text); alert("Presentees copied successfully!\n\n" + text); }
     catch(error) { console.error(error); alert("Unable to copy presentees. Please copy the roll numbers manually.\n\n" + text); }
@@ -1258,19 +1313,28 @@ async function copyAbsentees(){
         const record = getSelectedClassRecord();
         if (!record) { alert(`No saved attendance found for ${getSelectedDateString()} and the selected class.`); return; }
         text = record.absenteeRolls || "";
-    } else {
+    } else if (currentStudents.length) {
         const a = getAbsentees();
         text = a.regular.join(", ");
         if (a.lateral.length) text += (text ? "\n" : "") + "LE's:- " + a.lateral.join(", ");
+    } else {
+        const record = getSelectedClassRecord();
+        if (record) text = record.absenteeRolls || "";
     }
-    if (!text.trim()) { alert("No absentees found for the selected date."); return; }
+    if (!text.trim()) { alert("No absentees found for the selected date/class. Load the class or save attendance first."); return; }
     text = `Date: ${getSelectedDateString()}\n${text}`;
     try { await navigator.clipboard.writeText(text); alert("Absentees copied successfully!\n\n" + text); }
     catch(error) { console.error(error); alert("Unable to copy absentees. Please copy the roll numbers manually.\n\n" + text); }
 }
 
 function saveAttendance(){
-    if (!requireDataActionPassword("save attendance")) return;
+    if (attendanceDateInput.value > localISODate()) {
+        alert("Future attendance is not allowed.");
+        attendanceDateInput.value = localISODate();
+        lastAuthorizedAttendanceDate = attendanceDateInput.value;
+        handleDateFilterChange();
+        return;
+    }
     if (!isSelectedToday()) {
         alert("A previous date is selected. This view is read-only so saved attendance cannot be overwritten accidentally. Select today's date to mark and save attendance.");
         return;
@@ -1279,6 +1343,14 @@ function saveAttendance(){
     if(currentStudents.length === 0 || !cls){
         alert("Please select a class and click Load Students first.");
         return;
+    }
+
+    const priorHistory = getAttendanceHistory();
+    const priorIndex = priorHistory.findIndex(r => r.date === getSelectedDateString() && r.className === cls);
+    if (priorIndex >= 0) {
+        if (!requireDataActionPassword("modify the already-saved attendance")) return;
+    } else {
+        if (!requireDataActionPassword("save attendance")) return;
     }
 
     const year = cls.startsWith("2nd Year") ? "2nd Year" :
@@ -1296,6 +1368,18 @@ function saveAttendance(){
         absent: a.regular.length + a.lateral.length,
         presenteeRolls: [...p.regular, ...p.lateral].join(", "),
         absenteeRolls: [...a.regular, ...a.lateral].join(", "),
+        presenteeRegularRolls: p.regular.join(", "),
+        presenteeLateralRolls: p.lateral.join(", "),
+        absenteeRegularRolls: a.regular.join(", "),
+        absenteeLateralRolls: a.lateral.join(", "),
+        presenteeFullRolls: currentStudents.filter((student, index) => {
+            const mode = document.getElementById("attendanceMode").value;
+            return mode === "absent" ? !absentSet.has(index) : absentSet.has(index);
+        }).map(student => student.roll),
+        absenteeFullRolls: currentStudents.filter((student, index) => {
+            const mode = document.getElementById("attendanceMode").value;
+            return mode === "absent" ? absentSet.has(index) : !absentSet.has(index);
+        }).map(student => student.roll),
         savedAt: new Date().toISOString()
     };
 
@@ -1417,40 +1501,86 @@ function downloadAttendanceScreenshot(){
 
 function generateReport(){
     const date = getSelectedDateString();
+    const cls = document.getElementById("classSelect").value;
     const records = getRecordsForSelectedDate().slice();
-    if (isSelectedToday()) {
-        const cls = document.getElementById("classSelect").value;
-        if (cls && currentStudents.length && !records.some(r => r.className === cls)) {
-            const p = getPresentees(), a = getAbsentees();
-            records.push({
-                className: cls, total: currentStudents.length,
-                present: p.regular.length + p.lateral.length,
-                absent: a.regular.length + a.lateral.length,
-                presenteeRolls: [...p.regular, ...p.lateral].join(", "),
-                absenteeRolls: [...a.regular, ...a.lateral].join(", ")
-            });
-        }
+    const today = isSelectedToday();
+
+    // Prefer the selected class report, matching the requested WhatsApp format.
+    let record = cls ? records.find(r => r.className === cls) : null;
+    let live = today && cls && currentStudents.length > 0 &&
+               document.getElementById("classSelect").value === cls;
+
+    if (live) {
+        const p = getPresentees();
+        const a = getAbsentees();
+        record = {
+            className: cls,
+            total: currentStudents.length,
+            present: p.regular.length + p.lateral.length,
+            absent: a.regular.length + a.lateral.length,
+            presenteeRolls: [...p.regular, ...p.lateral].join(", "),
+            absenteeRolls: [...a.regular, ...a.lateral].join(", "),
+            presenteeRegularRolls: p.regular.join(", "),
+            presenteeLateralRolls: p.lateral.join(", "),
+            absenteeRegularRolls: a.regular.join(", "),
+            absenteeLateralRolls: a.lateral.join(", ")
+        };
     }
-    if (!records.length) return `Attendance Summary\nDate: ${date}\nNo saved attendance found for this date.`;
-    const totalStudents = records.reduce((sum, r) => sum + Number(r.total || 0), 0);
-    const totalPresent = records.reduce((sum, r) => sum + Number(r.present || 0), 0);
-    const totalAbsent = records.reduce((sum, r) => sum + Number(r.absent || 0), 0);
-    let report = `*CSM BRANCH ATTENDANCE SUMMARY*\n*Date:* ${date}\n*Classes with records:* ${records.length}\n`;
-    records.forEach(r => {
-        report += `\n*${r.className}*\nTotal Students: ${r.total}\nPresent: ${r.present}\nAbsent: ${r.absent}\nAbsent Roll Numbers: ${r.absenteeRolls || "None"}\n`;
-    });
-    report += `\n*GRAND TOTALS*\nTotal Students: ${totalStudents}\nPresent: ${totalPresent}\nAbsent: ${totalAbsent}`;
-    return report;
+
+    if (record) {
+        let regularAbsentees = record.absenteeRegularRolls;
+        let lateralAbsentees = record.absenteeLateralRolls;
+
+        // Older saved records may not have separate LE fields. Reconstruct them
+        // using the selected class roster when available.
+        if (regularAbsentees === undefined || lateralAbsentees === undefined) {
+            const savedRolls = String(record.absenteeRolls || "").split(/,\s*/).filter(Boolean);
+            const roster = students[record.className] || [];
+            const lateralSuffixes = new Set(roster.filter(st => String(st.roll).includes("T5A")).map(st => String(st.roll).slice(-2)));
+            lateralAbsentees = savedRolls.filter(roll => lateralSuffixes.has(roll)).join(", ");
+            regularAbsentees = savedRolls.filter(roll => !lateralSuffixes.has(roll)).join(", ");
+        }
+
+        const lines = [
+            "*Attendance*",
+            `*Date:* ${date}`,
+            `*Class:* ${record.className}`,
+            `*Total Students:* ${record.total}`,
+            `*Presentees:* ${record.present}`,
+            "",
+            `*Absentees:* ${record.absent}`,
+            regularAbsentees || "None"
+        ];
+        if (String(lateralAbsentees || "").trim()) {
+            lines.push(`LE's:- ${lateralAbsentees}`);
+        }
+        return lines.join("\n");
+    }
+
+    // If no class is selected, make one formatted section per saved class.
+    if (!records.length) return `*Attendance*\n*Date:* ${date}\nNo saved attendance found for this date.`;
+    return records.map(r => {
+        const savedRolls = String(r.absenteeRolls || "").split(/,\s*/).filter(Boolean);
+        const roster = students[r.className] || [];
+        const lateralSuffixes = new Set(roster.filter(st => String(st.roll).includes("T5A")).map(st => String(st.roll).slice(-2)));
+        const lateral = r.absenteeLateralRolls !== undefined ? r.absenteeLateralRolls : savedRolls.filter(roll => lateralSuffixes.has(roll)).join(", ");
+        const regular = r.absenteeRegularRolls !== undefined ? r.absenteeRegularRolls : savedRolls.filter(roll => !lateralSuffixes.has(roll)).join(", ");
+        const lines = ["*Attendance*", `*Date:* ${date}`, `*Class:* ${r.className}`, `*Total Students:* ${r.total}`, `*Presentees:* ${r.present}`, "", `*Absentees:* ${r.absent}`, regular || "None"];
+        if (String(lateral || "").trim()) lines.push(`LE's:- ${lateral}`);
+        return lines.join("\n");
+    }).join("\n\n");
 }
 
-function copyReport(){
-    if (!requireDataActionPassword("view/copy the attendance summary")) return;
-
-    const report=generateReport();
-
-    navigator.clipboard.writeText(report);
-
-    alert("Attendance report copied");
+async function copyReport(){
+    if (!requireDataActionPassword("view/copy the attendance report")) return;
+    const report = generateReport();
+    try {
+        await navigator.clipboard.writeText(report);
+        alert("Attendance report copied successfully!\n\n" + report);
+    } catch (error) {
+        console.error(error);
+        alert("Unable to copy automatically. Please copy this report manually:\n\n" + report);
+    }
 }
 
 
