@@ -1105,7 +1105,7 @@ const students = {
         { roll: "268T5A4210", name: "KIRANMAYAI" },
         { roll: "268T5A4211", name: "TEJASRI" },
         { roll: "268T5A4212", name: "CHARAN MANNE" },
-        { roll: "268T5A4213", name: "SHAIK HOUSEEF" }
+        { roll: "268T5A4213", name: "HOUSUF RAHMAN" },
 // add upto 66 students
 ],
 
@@ -1455,6 +1455,10 @@ const scriptURL = "https://script.google.com/macros/s/AKfycbzAwL7DhSfLvodXUS0oPf
     
 let currentStudents=[];
 
+// Cloud attendance is fetched from Google Sheets and cached only for this page session.
+const cloudAttendanceRecords = new Map();
+const cloudLoadsInFlight = new Map();
+
 const absentSet = new Set();
 
 const grid = document.getElementById("grid");
@@ -1501,6 +1505,10 @@ function getRecordsForSelectedDate() {
 
 function getSelectedClassRecord() {
     const cls = document.getElementById("classSelect").value;
+    const cloudKey = cls + "|" + getSelectedDateString();
+    if (cloudAttendanceRecords.has(cloudKey)) {
+        return cloudAttendanceRecords.get(cloudKey);
+    }
     return getRecordsForSelectedDate().find(record => record.className === cls) || null;
 }
 
@@ -1596,9 +1604,27 @@ function getRollsFromSavedRecord(record, status) {
     )).map(student => student.roll);
 }
 
-function loadStudents(){
+async function loadStudents(){
 
     let selected = document.getElementById("classSelect").value;
+
+    if (!selected) {
+        currentStudents = [];
+        absentSet.clear();
+        grid.innerHTML = "";
+        updateCounts();
+        return;
+    }
+
+    // Read Google Sheets before rendering so this device shows attendance saved elsewhere.
+    try {
+        await loadCloudAttendanceForClass(selected);
+    } catch (error) {
+        console.warn("Could not load attendance from Google Sheets; using this device's saved copy.", error);
+    }
+
+    // Ignore an old network response if the user changed class while it was loading.
+    if (selected !== document.getElementById("classSelect").value) return;
 
     let mode = document.getElementById("attendanceMode").value;
 
@@ -1983,22 +2009,46 @@ function saveAttendance(){
     else history.push(record);
     localStorage.setItem("csmAttendanceHistory", JSON.stringify(history));
 
-    // Also send the summary to the existing Google Apps Script endpoint.
-    const googlePayload = {
+    // Save each student's P/AB status to the monthly class tab as well as the daily summary.
+    const monthlyPayload = {
+        action: "monthlyAttendance",
+        date: record.date,
+        className: cls,
+        year: record.year,
+        section: record.section,
+        total: record.total,
+        present: record.present,
+        absent: record.absent,
+        students: currentStudents.map(student => ({
+            roll: String(student.roll || "").trim(),
+            name: String(student.name || "").trim(),
+            status: record.absenteeFullRolls.includes(student.roll) ? "AB" : "P"
+        }))
+    };
+    const summaryPayload = {
         date: record.date, year: record.year, section: record.section,
         total: record.total, present: record.present, absent: record.absent
     };
-    fetch(scriptURL, {
-        method: "POST",
-        body: JSON.stringify(googlePayload)
-    })
-    .then(response => response.text())
-    .then(result => {
-        alert("✅ Attendance saved to this device. Google Sheet request sent too.\n\nUse Export All Attendance to Excel to download the history.");
-        console.log(result);
-    })
-    .catch(error => {
-        alert("✅ Attendance saved on this device.\n\n⚠️ Google Sheet save could not be confirmed. Check your Apps Script URL/deployment, then export Excel as a backup.");
+
+    Promise.all([
+        fetch(scriptURL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(monthlyPayload)
+        }),
+        fetch(scriptURL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(summaryPayload)
+        })
+    ]).then(() => {
+        alert("✅ Attendance saved on this device.\\n\\nGoogle Sheets sync requests were sent, including each student's P/AB status.\\n\\nOn another device, open this same webpage, select the class, and click Load Students. Verify the Google Sheet if records do not appear.");
+        cloudLoadsInFlight.delete(cls + "|" + Number(record.date.split("/")[1]));
+        loadStudents();
+    }).catch(error => {
+        alert("✅ Attendance saved on this device.\\n\\n⚠️ Google Sheets could not be contacted. Check your Apps Script URL/deployment and internet connection.");
         console.error(error);
     });
 }
@@ -2065,6 +2115,136 @@ function monthlyTabNamePreview(className){
 function getAttendanceHistory(){
     try { return JSON.parse(localStorage.getItem("csmAttendanceHistory") || "[]"); }
     catch(e) { return []; }
+}
+
+function normalizeCloudDate(value) {
+    const match = String(value || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!match) return String(value || "").trim();
+    return String(Number(match[1])).padStart(2, "0") + "/" +
+           String(Number(match[2])).padStart(2, "0") + "/" + match[3];
+}
+
+function loadCloudAttendanceForClass(className) {
+    const selectedISO = document.getElementById("attendanceDate").value || localISODate();
+    const month = Number(selectedISO.split("-")[1]);
+    const requestKey = className + "|" + month;
+
+    // The existing attendance-mode listeners can trigger the same load together.
+    if (cloudLoadsInFlight.has(requestKey)) return cloudLoadsInFlight.get(requestKey);
+
+    const promise = new Promise((resolve, reject) => {
+        const callbackName = "__csmAttendanceCallback_" + Date.now() + "_" +
+                             Math.floor(Math.random() * 1000000);
+        const script = document.createElement("script");
+        let finished = false;
+        let timer;
+
+        const cleanup = () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            script.remove();
+            try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+        };
+
+        timer = setTimeout(() => {
+            cleanup();
+            reject(new Error("Google Sheets read timed out. Check the Apps Script deployment."));
+        }, 15000);
+
+        window[callbackName] = (data) => {
+            cleanup();
+            try {
+                if (!data || data.ok !== true) {
+                    throw new Error((data && data.error) || "Google Sheets did not return attendance.");
+                }
+
+                if (data.found && Array.isArray(data.headers) && Array.isArray(data.students)) {
+                    const headers = data.headers;
+                    const sheetStudents = data.students;
+                    const history = getAttendanceHistory();
+
+                    headers.slice(2).forEach((rawDate) => {
+                        const date = normalizeCloudDate(rawDate);
+                        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(date)) return;
+
+                        const presentRolls = [];
+                        const absentRolls = [];
+                        sheetStudents.forEach((student) => {
+                            const status = String(
+                                (student.attendance && student.attendance[rawDate]) || ""
+                            ).trim().toUpperCase();
+                            const roll = String(student.roll || "").trim();
+                            if (!roll) return;
+                            if (status === "P") presentRolls.push(roll);
+                            else if (status === "AB") absentRolls.push(roll);
+                        });
+
+                        // Ignore date columns with no attendance values.
+                        if (presentRolls.length + absentRolls.length === 0) return;
+
+                        const record = {
+                            date: date,
+                            className: className,
+                            year: className.startsWith("2nd Year") ? "2nd Year" :
+                                  className.startsWith("3rd Year") ? "3rd Year" :
+                                  className.startsWith("4th Year") ? "4th Year" : "Other",
+                            section: className.includes("A Sec") ? "CSM-A" :
+                                     className.includes("B Sec") ? "CSM-B" : className,
+                            total: presentRolls.length + absentRolls.length,
+                            present: presentRolls.length,
+                            absent: absentRolls.length,
+                            presenteeFullRolls: presentRolls,
+                            absenteeFullRolls: absentRolls,
+                            presenteeRolls: presentRolls.join(", "),
+                            absenteeRolls: absentRolls.join(", "),
+                            presenteeRegularRolls: presentRolls.filter(r => !r.includes("T5A")).join(", "),
+                            presenteeLateralRolls: presentRolls.filter(r => r.includes("T5A")).join(", "),
+                            absenteeRegularRolls: absentRolls.filter(r => !r.includes("T5A")).join(", "),
+                            absenteeLateralRolls: absentRolls.filter(r => r.includes("T5A")).join(", "),
+                            savedAt: new Date().toISOString()
+                        };
+
+                        cloudAttendanceRecords.set(className + "|" + date, record);
+                        const existingIndex = history.findIndex(item =>
+                            item.className === className && item.date === date
+                        );
+                        if (existingIndex >= 0) history[existingIndex] = record;
+                        else history.push(record);
+                    });
+
+                    try {
+                        localStorage.setItem("csmAttendanceHistory", JSON.stringify(history));
+                    } catch (storageError) {
+                        console.warn("Cloud attendance loaded, but local history could not be updated.", storageError);
+                    }
+                }
+                resolve(data);
+            } catch (error) {
+                reject(error);
+            }
+        };
+
+        script.onerror = () => {
+            cleanup();
+            reject(new Error("Could not contact the Google Apps Script web app."));
+        };
+
+        const params = new URLSearchParams({
+            action: "loadMonthlyAttendance",
+            className: className,
+            month: String(month),
+            callback: callbackName,
+            _: String(Date.now())
+        });
+        script.src = scriptURL + "?" + params.toString();
+        document.head.appendChild(script);
+    }).finally(() => {
+        cloudLoadsInFlight.delete(requestKey);
+    });
+
+    cloudLoadsInFlight.set(requestKey, promise);
+    return promise;
 }
 
 function downloadMonthlyAttendanceExcel(){
