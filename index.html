@@ -1903,45 +1903,112 @@ function getPresentees(){
     };
 }
     
-async function copyPresentees(){
+
+async function copyPresentees() {
     let text = "";
+
     if (!isSelectedToday()) {
         const record = getSelectedClassRecord();
-        if (!record) { alert(`No saved attendance found for ${getSelectedDateString()} and the selected class.`); return; }
+        if (!record) {
+            alert(`No saved attendance found for ${getSelectedDateString()} and the selected class.`);
+            return;
+        }
         text = record.presenteeRolls || "";
+
     } else if (currentStudents.length) {
         const p = getPresentees();
         text = p.regular.join(", ");
-        if (p.lateral.length) text += (text ? "\n" : "") + "LE's:- " + p.lateral.join(", ");
+
+        if (p.lateral.length) {
+            text += (text ? "\n" : "") + "LE's:- " + p.lateral.join(", ");
+        }
+
     } else {
         const record = getSelectedClassRecord();
         if (record) text = record.presenteeRolls || "";
     }
-    if (!text.trim()) { alert("No presentees found for the selected date/class. Load the class or save attendance first."); return; }
-    text = `Date: ${getSelectedDateString()}\n${text}`;
-    try { await navigator.clipboard.writeText(text); alert("Presentees copied successfully!\n\n" + text); }
-    catch(error) { console.error(error); alert("Unable to copy presentees. Please copy the roll numbers manually.\n\n" + text); }
+
+    if (!text.trim()) {
+        alert("No presentees found for the selected date/class. Load the class or save attendance first.");
+        return;
+    }
+
+    // Remove the date and display only the last two digits of each roll number.
+    text = text.split("\n").map(line => {
+        if (line.startsWith("LE's:-")) {
+            const rolls = line.replace("LE's:-", "").trim();
+            return "LE's:- " + rolls.split(",")
+                .map(roll => roll.trim().slice(-2))
+                .join(", ");
+        }
+
+        return line.split(",")
+            .map(roll => roll.trim().slice(-2))
+            .join(", ");
+    }).join("\n");
+
+    try {
+        await navigator.clipboard.writeText(text);
+        alert("Presentees copied successfully!\n\n" + text);
+    } catch (error) {
+        console.error(error);
+        alert("Unable to copy presentees. Please copy the roll numbers manually.\n\n" + text);
+    }
 }
 
-async function copyAbsentees(){
+
+async function copyAbsentees() {
     let text = "";
+
     if (!isSelectedToday()) {
         const record = getSelectedClassRecord();
-        if (!record) { alert(`No saved attendance found for ${getSelectedDateString()} and the selected class.`); return; }
+        if (!record) {
+            alert(`No saved attendance found for ${getSelectedDateString()} and the selected class.`);
+            return;
+        }
         text = record.absenteeRolls || "";
+
     } else if (currentStudents.length) {
         const a = getAbsentees();
         text = a.regular.join(", ");
-        if (a.lateral.length) text += (text ? "\n" : "") + "LE's:- " + a.lateral.join(", ");
+
+        if (a.lateral.length) {
+            text += (text ? "\n" : "") + "LE's:- " + a.lateral.join(", ");
+        }
+
     } else {
         const record = getSelectedClassRecord();
         if (record) text = record.absenteeRolls || "";
     }
-    if (!text.trim()) { alert("No absentees found for the selected date/class. Load the class or save attendance first."); return; }
-    text = `Date: ${getSelectedDateString()}\n${text}`;
-    try { await navigator.clipboard.writeText(text); alert("Absentees copied successfully!\n\n" + text); }
-    catch(error) { console.error(error); alert("Unable to copy absentees. Please copy the roll numbers manually.\n\n" + text); }
+
+    if (!text.trim()) {
+        alert("No absentees found for the selected date/class. Load the class or save attendance first.");
+        return;
+    }
+
+    // Remove the date and display only the last two digits of each roll number.
+    text = text.split("\n").map(line => {
+        if (line.startsWith("LE's:-")) {
+            const rolls = line.replace("LE's:-", "").trim();
+            return "LE's:- " + rolls.split(",")
+                .map(roll => roll.trim().slice(-2))
+                .join(", ");
+        }
+
+        return line.split(",")
+            .map(roll => roll.trim().slice(-2))
+            .join(", ");
+    }).join("\n");
+
+    try {
+        await navigator.clipboard.writeText(text);
+        alert("Absentees copied successfully!\n\n" + text);
+    } catch (error) {
+        console.error(error);
+        alert("Unable to copy absentees. Please copy the roll numbers manually.\n\n" + text);
+    }
 }
+
 
 function saveAttendance(){
     if (attendanceDateInput.value > localISODate()) {
@@ -2642,6 +2709,14 @@ function generateReport(){
             regularAbsentees = savedRolls.filter(roll => !lateralSuffixes.has(roll)).join(", ");
         }
 
+        const shortRollNumbers = rolls =>
+            String(rolls || "")
+                .split(/,\s*/)
+                .map(roll => roll.trim())
+                .filter(Boolean)
+                .map(roll => roll.slice(-2))
+                .join(", ");
+
         const lines = [
             "*Attendance*",
             `*Date:* ${date}`,
@@ -2650,10 +2725,11 @@ function generateReport(){
             `*Presentees:* ${record.present}`,
             "",
             `*Absentees:* ${record.absent}`,
-            regularAbsentees || "None"
+            shortRollNumbers(regularAbsentees) || "None"
         ];
+
         if (String(lateralAbsentees || "").trim()) {
-            lines.push(`LE's:- ${lateralAbsentees}`);
+            lines.push(`LE's:- ${shortRollNumbers(lateralAbsentees)}`);
         }
         return lines.join("\n");
     }
